@@ -435,11 +435,17 @@ function renderInicio(){
   const qs=ymd(new Date(now.getFullYear(),now.getMonth(),qStart)), qe=ymd(new Date(now.getFullYear(),now.getMonth(),qEnd));
   const qOut=S.movs.filter(m=>m.t==="gasto"&&m.d>=qs&&m.d<=qe).reduce((s,m)=>s+m.a,0);
   const qIn=S.movs.filter(m=>m.c==="abuelo"&&m.d>=qs&&m.d<=qe).reduce((s,m)=>s+m.a,0);
-  const base=qIn||S.settings.quin||0, left=base-qOut, daysLeft=qEnd-dd+1;
-  const frac=base>0?Math.max(0,Math.min(1,left/base)):0;
-  $("qRing").setAttribute("stroke-dashoffset",(138.2*(1-frac)).toFixed(1));
-  $("qTitle").textContent=left>=0?"Te quedan "+money(left)+" de tu quincena":"Te pasaste "+money(-left)+" de tu quincena";
-  $("qText").textContent=left>0?"Para que te alcance: unos "+money(left/daysLeft)+" al día por "+daysLeft+(daysLeft===1?" día":" días")+".":(qIn?"Ya no queda de esta quincena.":"Cuando te llegue, anótala en Me dieron → Abuelo.");
+  const daysLeft=qEnd-dd+1;
+  if(!qIn){
+    $("qRing").setAttribute("stroke-dashoffset","138.2");
+    $("qTitle").textContent="Tu quincena aún no llega";
+    $("qText").textContent="Cuando te llegue, tócala en + → Me dieron → Abuelo y aquí verás cuánto te queda.";
+  }else{
+    const left=qIn-qOut, frac=Math.max(0,Math.min(1,left/qIn));
+    $("qRing").setAttribute("stroke-dashoffset",(138.2*(1-frac)).toFixed(1));
+    $("qTitle").textContent=left>=0?"Te quedan "+money(left)+" de tu quincena":"Te pasaste "+money(-left)+" de tu quincena";
+    $("qText").textContent=left>0?"Para que te alcance: unos "+money(left/daysLeft)+" al día por "+daysLeft+(daysLeft===1?" día":" días")+".":"Ya no queda de esta quincena.";
+  }
 
   // Meta de ventas
   const ventas=ms.filter(m=>m.t==="venta").reduce((s,m)=>s+m.a,0), mt=meta(mk);
