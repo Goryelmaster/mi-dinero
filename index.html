@@ -163,6 +163,11 @@ h2{font:700 18px/1.2 var(--round);margin:0}
 .input:focus{outline:none;border-color:var(--ink)}
 .help{font-size:13px;color:var(--ink-2);margin:0}
 
+/* Límite semanal */
+.lim-line{font:800 24px/1.1 var(--round)}
+.lim-line span{color:var(--ink-3);font-weight:600}
+.bar i.warn{background:var(--mango)}
+.bar i.over{background:var(--coral)}
 /* Temas */
 .themes{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .th{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 4px;border-radius:14px;border:2px solid transparent;font-size:13px;color:var(--ink-2);transition:transform 140ms var(--ease-out)}
@@ -254,6 +259,11 @@ h2{font:700 18px/1.2 var(--round);margin:0}
       <div><b id="qTitle">Tu quincena</b><p id="qText"></p></div>
     </section>
 
+    <section class="block" id="limBlock">
+      <div class="block-h"><h2>Límite de la semana</h2><button class="link" id="limEdit">Cambiar</button></div>
+      <div id="limBody"></div>
+    </section>
+
     <section class="block">
       <div class="block-h"><h2>Tus ventas del mes</h2><button class="link" id="editMeta">Cambiar meta</button></div>
       <div class="meta-line num" id="metaLine">$0 <span>de $3,000</span></div>
@@ -302,6 +312,12 @@ h2{font:700 18px/1.2 var(--round);margin:0}
       <label class="field"><span>Lo que te da tu abuelo cada quincena</span><input class="input num" id="setQuin" type="number" inputmode="numeric" min="0"></label>
       <label class="field"><span>Meta de ventas de este mes</span><input class="input num" id="setMeta" type="number" inputmode="numeric" min="0"></label>
       <p class="help">Se guarda solo al cambiarlo.</p>
+    </section>
+    <section class="block" style="display:flex;flex-direction:column;gap:14px">
+      <h2>Límite de la semana</h2>
+      <p class="help">Tu Contador te propone uno cada domingo. La semana va de lunes a domingo.</p>
+      <label class="field"><span>¿En qué?</span><select class="input" id="limCat"></select></label>
+      <label class="field"><span>Máximo a gastar (pon 0 para quitarlo)</span><input class="input num" id="limAmt" type="number" inputmode="numeric" min="0"></label>
     </section>
     <div>
       <h2 style="margin-bottom:10px">Respaldo</h2>
@@ -420,9 +436,28 @@ function meta(mk){return S.settings.metas[mk]||S.settings.metas._last||3000;}
 
 {const f=new Date().toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"});$("today").textContent=f[0].toUpperCase()+f.slice(1);}
 
+/* ---------- Límite semanal ---------- */
+function weekStart(){const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));return ymd(d);}
+function limInfo(){const L=S.settings.limit;if(!L||!L.amount)return null;const ws=weekStart();
+  const spent=S.movs.filter(m=>m.t==="gasto"&&m.d>=ws&&m.d<=today()&&(L.cat==="total"||m.c===L.cat)).reduce((s,m)=>s+m.a,0);
+  const name=L.cat==="total"?"Todo lo que gastes":(ALL[L.cat]||{n:L.cat}).n;const em=L.cat==="total"?"🧾":(ALL[L.cat]||{em:"•"}).em;
+  return{...L,spent,name,em,pct:spent/L.amount};}
+function renderLim(){const I=limInfo(),b=$("limBody");
+  if(!I){b.innerHTML='<p class="sub" style="margin:0">Aún no tienes límite. Ponlo en Ajustes o espera la propuesta de tu Contador el domingo.</p>';return;}
+  const left=I.amount-I.spent,cls=I.pct>=1?"over":I.pct>=.8?"warn":"";
+  const dLeft=7-((new Date().getDay()+6)%7);
+  b.innerHTML='<div class="sub" style="margin:0 0 6px">'+I.em+' '+esc(I.name)+'</div><div class="lim-line num">'+money(I.spent)+' <span>de '+money(I.amount)+'</span></div>'
+   +'<div class="bar"><i class="'+cls+'" style="width:'+Math.min(100,I.pct*100).toFixed(1)+'%"></i></div>'
+   +'<p class="sub" style="margin:0">'+(left<0?"Te pasaste por "+money(-left)+". Esta semana ya no más en esto 🙏":left===0?"Llegaste justo a tu límite.":"Te quedan "+money(left)+" para "+dLeft+(dLeft===1?" día":" días")+(I.pct>=.8?". Ya vas cerca, ojo 👀":"."))+'</p>';}
+$("limCat").innerHTML='<option value="total">🧾 Todo lo que gaste</option>'+CATS.gasto.map(c=>'<option value="'+c.id+'">'+c.em+' '+c.n+'</option>').join("");
+function saveLim(){const a=Math.max(0,Math.round(+$("limAmt").value||0));S.settings.limit=a?{cat:$("limCat").value,amount:a}:null;persist();renderAll();toast(a?"Límite guardado":"Límite quitado");}
+$("limCat").addEventListener("change",()=>{if(+$("limAmt").value>0)saveLim();});
+$("limAmt").addEventListener("change",saveLim);
+$("limEdit").onclick=()=>{go("mas");setTimeout(()=>$("limAmt").focus(),50);};
+
 /* ---------- Inicio ---------- */
 function haveNow(){return S.movs.reduce((s,m)=>s+(m.t==="gasto"?-m.a:m.a),0);}
-function renderInicio(){
+function renderInicio(){renderLim();
   const mk=monthKey(today()), ms=inMonth(mk);
   const inn=ms.filter(isIn).reduce((s,m)=>s+m.a,0), out=ms.filter(m=>m.t==="gasto").reduce((s,m)=>s+m.a,0);
   const bal=haveNow();
@@ -522,7 +557,7 @@ function renderBiz(){
 }
 
 /* ---------- Ajustes ---------- */
-function renderMas(){
+function renderMas(){const L=S.settings.limit;$("limCat").value=L?L.cat:"comida";$("limAmt").value=L?L.amount:"";
   $("setQuin").value=S.settings.quin||"";
   $("setMeta").value=meta(monthKey(today()));
   $("bkLast").textContent=S.lastBackup?"Último: "+new Date(S.lastBackup).toLocaleDateString("es-MX",{day:"numeric",month:"long"}):"Nunca has hecho uno";
@@ -640,11 +675,16 @@ $("save").onclick=()=>{
     const rec={id:uid(),t:"ajuste",c:"ajuste",a:d,n:"",d:today(),at:Date.now()};S.movs.push(rec);persist();renderAll();
     toast("Listo: ahora tienes "+money(haveNow()),()=>{S.movs=S.movs.filter(x=>x.id!==rec.id);persist();renderAll();toast("Listo, se quitó");});return;}
   const a=+F.a;if(!(a>0&&F.c))return;
+  const before=limInfo();
   const rec={id:F.id||uid(),t:F.t,c:F.c,a,n:$("note").value.trim(),d:$("date").value||today(),at:Date.now()};
   if(F.id){const i=S.movs.findIndex(x=>x.id===F.id);if(i>-1)S.movs[i]={...S.movs[i],...rec};}
   else S.movs.push(rec);
   persist();closeSheet();renderAll();
-  const k=ALL[rec.c];
+  const k=ALL[rec.c],after=limInfo();
+  if(!F.id&&rec.t==="gasto"&&after&&before&&(after.cat==="total"||after.cat===rec.c)){
+    if(after.pct>=1&&before.pct<1){setTimeout(()=>toast("⚠️ Te pasaste de tu límite de "+after.name.toLowerCase()),5200);}
+    else if(after.pct>=.8&&before.pct<.8){setTimeout(()=>toast("👀 Ya llevas "+Math.round(after.pct*100)+"% de tu límite"),5200);}
+  }
   toast((F.id?"Cambios guardados":(rec.t==="gasto"?"Gasto anotado":rec.t==="venta"?"Venta anotada":"Ingreso anotado")+": "+money(a)+" · "+k.n),F.id?null:()=>{S.movs=S.movs.filter(x=>x.id!==rec.id);persist();renderAll();toast("Listo, se quitó");});
 };
 $("delMv").onclick=()=>{if(!confirmTwice($("delMv"),"Toca otra vez para borrar"))return;
