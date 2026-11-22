@@ -237,6 +237,17 @@ h2{font:700 18px/1.2 var(--round);margin:0}
 .rep-list small.short{color:var(--coral);font-weight:600}
 .rep-list small.ok{color:var(--leaf)}
 .rep-list li.skip b{color:var(--ink-3)}
+.cobros{display:flex;flex-direction:column;gap:10px}
+.cobros:empty{display:none}
+.cobro{display:grid;grid-template-columns:36px 1fr auto;gap:2px 12px;align-items:center;background:var(--sheet);border-radius:18px;padding:12px 14px;box-shadow:inset 0 0 0 1.5px var(--mango)}
+.cobro.soon{box-shadow:none}
+.cobro .ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-size:18px;background:var(--paper);grid-row:1/3}
+.cobro b{font-weight:600;font-size:15px}
+.cobro small{color:var(--ink-2);font-size:13px;grid-column:2}
+.cobro .acts{grid-row:1/3;grid-column:3;display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.cobro .acts button:first-child{background:var(--ink);color:var(--paper);font:700 14px var(--round);padding:8px 14px;border-radius:12px;transition:transform 140ms var(--ease-out)}
+.cobro .acts button:first-child:active{transform:scale(.96)}
+.cobro .acts button+button{font-size:12px;color:var(--ink-2);padding:2px 4px}
 .later{margin-top:6px;width:100%;height:44px;border-radius:14px;color:var(--ink-2);font-weight:600}
 /* Temas */
 .themes{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -332,6 +343,7 @@ h2{font:700 18px/1.2 var(--round);margin:0}
       <div><b id="qTitle">Tu quincena</b><p id="qText"></p></div>
     </section>
 
+    <div id="cobrosIni" class="cobros"></div>
     <section class="block" id="sobBlock">
       <div class="block-h"><h2>Tus sobres de la semana</h2><button class="link" id="sobSee">Ver sobres</button></div>
       <div class="mini" id="sobMini"></div>
@@ -371,6 +383,7 @@ h2{font:700 18px/1.2 var(--round);margin:0}
   <main class="view" id="v-sobres" hidden>
     <div><h1>Tus sobres</h1><p class="sub" id="sobSub"></p></div>
     <div id="sobPend"></div>
+    <div id="cobrosSob" class="cobros"></div>
     <div class="sobres" id="sobList"></div>
     <p class="help">Cada lunes empiezan de cero. Cambia montos y categorías en Ajustes.</p>
   </main>
@@ -389,6 +402,13 @@ h2{font:700 18px/1.2 var(--round);margin:0}
       <p class="help">La semana va de lunes a domingo. Cuando cobras, "Repartir" los llena en este orden, de arriba hacia abajo. Lo que sobre va a Ahorro.</p>
       <div class="sob-ed" id="sobEd"></div>
       <button class="ghost" id="sobAdd">+ Agregar un sobre</button>
+    </section>
+    <section class="block" style="display:flex;flex-direction:column;gap:12px">
+      <h2>Tus membresías</h2>
+      <p class="help">Anota lo que pagas cada mes y el día que te lo cobran. Cada semana se aparta un poco en el sobre Membresías, y el día del cobro la app te avisa para anotarlo.</p>
+      <div class="sob-ed" id="memEd"></div>
+      <p class="help num" id="memTot"></p>
+      <div class="cat-chips" id="memAdd"><button data-new="gym">+ Gym</button><button data-new="claude">+ Claude</button><button data-new="otra">+ Otra</button></div>
     </section>
     <section class="block" style="display:flex;flex-direction:column;gap:12px">
       <h2>Color de la app</h2>
@@ -501,43 +521,6 @@ const ALL={ajuste:{id:"ajuste",n:"Ajuste de saldo",em:"⚖️",t:"ajuste"}};Obje
 const T_LBL={gasto:"gasto",venta:"venta",ingreso:"ingreso"};
 const STEPS=[3000,8000,20000];
 
-/* ---------- Guardado (solo en este celular) ---------- */
-const KEY="panel-santino:v1";
-let mem=null;
-function blank(){return{movs:[],settings:{quin:1000,metas:{}},lastBackup:null};}
-/* Sobres por defecto, en el orden en que se llenan al repartir */
-function defaultSobres(){return[
-  {id:"diezmo",nombre:"Diezmo",monto:10,cats:["diezmo"],tipo:"porcentaje"},
-  {id:"comida",nombre:"Comida / dieta",monto:0,cats:["comida"],tipo:"fijo"},
-  {id:"camion",nombre:"Camión y gastos diarios",monto:0,cats:["camion","escuela","otro-gasto"],tipo:"fijo"},
-  {id:"ahorro",nombre:"Ahorro",monto:0,cats:[],tipo:"fijo"},
-  {id:"negocio",nombre:"Inversión en negocio",monto:0,cats:["compra-perfumes","insumos-perfumes","apps-gasto"],tipo:"fijo"}];}
-/* Acepta respaldos viejos: si no hay sobres los crea y pasa el "Límite de la semana" (settings.limit) a su sobre. */
-function normalize(d){
-  d=d||{};const st={...blank().settings,...(d.settings||{})};
-  if(!st.metas||typeof st.metas!=="object")st.metas={};
-  if(!Array.isArray(st.sobres)){
-    st.sobres=defaultSobres();
-    const L=st.limit;
-    if(L&&+L.amount>0){
-      const hit=L.cat!=="total"&&st.sobres.find(x=>x.tipo==="fijo"&&x.id!=="ahorro"&&x.cats.includes(L.cat));
-      if(hit)hit.monto=+L.amount;
-      else st.sobres.push({id:"limite",nombre:L.cat==="total"?"Todo lo que gaste":((ALL[L.cat]||{}).n||L.cat),monto:+L.amount,cats:L.cat==="total"?CATS.gasto.map(c=>c.id):[L.cat],tipo:"fijo"});
-    }
-  }
-  st.sobres=st.sobres.filter(x=>x&&x.id).map(x=>({...x,nombre:String(x.nombre||"Sobre"),monto:Math.max(0,+x.monto||0),cats:Array.isArray(x.cats)?x.cats:[],tipo:x.tipo==="porcentaje"?"porcentaje":"fijo"}));
-  if(!Array.isArray(st.repartos))st.repartos=[];
-  if(typeof st.diezmoAbuelo!=="boolean")st.diezmoAbuelo=false;
-  return{...blank(),...d,movs:Array.isArray(d.movs)?d.movs:[],settings:st};
-}
-function load(){
-  try{const raw=localStorage.getItem(KEY);if(raw)return normalize(JSON.parse(raw));}catch(e){}
-  return mem||normalize({});
-}
-let S=load();
-function persist(){mem=S;try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
-try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist();}catch(e){}
-
 /* ---------- Utilidades ---------- */
 const $=id=>document.getElementById(id);
 const money=n=>new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",maximumFractionDigits:0}).format(Math.round(n||0));
@@ -552,12 +535,59 @@ function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;","
 function inMonth(mk){return S.movs.filter(m=>monthKey(m.d)===mk);}
 function meta(mk){return S.settings.metas[mk]||S.settings.metas._last||3000;}
 
+/* ---------- Guardado (solo en este celular) ---------- */
+const KEY="panel-santino:v1";
+let mem=null;
+function blank(){return{movs:[],settings:{quin:1000,metas:{}},lastBackup:null};}
+/* Sobres por defecto, en el orden en que se llenan al repartir */
+function defaultSobres(){return[
+  {id:"diezmo",nombre:"Diezmo",monto:10,cats:["diezmo"],tipo:"porcentaje"},
+  MEM_SOBRE(),
+  {id:"comida",nombre:"Comida / dieta",monto:0,cats:["comida"],tipo:"fijo"},
+  {id:"camion",nombre:"Camión y gastos diarios",monto:0,cats:["camion","escuela","otro-gasto"],tipo:"fijo"},
+  {id:"ahorro",nombre:"Ahorro",monto:0,cats:[],tipo:"fijo"},
+  {id:"negocio",nombre:"Inversión en negocio",monto:0,cats:["compra-perfumes","insumos-perfumes","apps-gasto"],tipo:"fijo"}];}
+/* Membresías: se apartan poquito a poco cada semana para que alcance el día del cobro */
+function MEM_SOBRE(){return{id:"membresias",nombre:"Membresías",monto:0,cats:["gym","suscripciones"],tipo:"membresias"};}
+/* Acepta respaldos viejos: si no hay sobres los crea y pasa el "Límite de la semana" (settings.limit) a su sobre. */
+function normalize(d){
+  d=d||{};const st={...blank().settings,...(d.settings||{})};
+  if(!st.metas||typeof st.metas!=="object")st.metas={};
+  if(!Array.isArray(st.sobres)){
+    st.sobres=defaultSobres();
+    const L=st.limit;
+    if(L&&+L.amount>0){
+      const hit=L.cat!=="total"&&st.sobres.find(x=>x.tipo==="fijo"&&x.id!=="ahorro"&&x.cats.includes(L.cat));
+      if(hit)hit.monto=+L.amount;
+      else st.sobres.push({id:"limite",nombre:L.cat==="total"?"Todo lo que gaste":((ALL[L.cat]||{}).n||L.cat),monto:+L.amount,cats:L.cat==="total"?CATS.gasto.map(c=>c.id):[L.cat],tipo:"fijo"});
+    }
+  }
+  st.sobres=st.sobres.filter(x=>x&&x.id).map(x=>({...x,nombre:String(x.nombre||"Sobre"),monto:Math.max(0,+x.monto||0),cats:Array.isArray(x.cats)?x.cats:[],tipo:["porcentaje","membresias"].includes(x.tipo)?x.tipo:"fijo"}));
+  if(!st.sobres.some(x=>x.id==="membresias")){const M=MEM_SOBRE();
+    st.sobres.forEach(x=>{x.cats=x.cats.filter(c=>!M.cats.includes(c));});
+    const i=st.sobres.findIndex(x=>x.id==="diezmo");st.sobres.splice(i+1,0,M);}
+  if(!st.memDesde)st.memDesde=ymd(new Date());
+  st.membresias=(Array.isArray(st.membresias)?st.membresias:[]).filter(m=>m&&m.id).map(m=>({...m,nombre:String(m.nombre||"Membresía"),monto:Math.max(0,+m.monto||0),dia:Math.min(31,Math.max(1,Math.round(+m.dia||1))),cat:m.cat||"suscripciones",activa:m.activa!==false,desde:m.desde||st.memDesde}));
+  if(!Array.isArray(st.memOmit))st.memOmit=[];
+  if(!Array.isArray(st.repartos))st.repartos=[];
+  if(typeof st.diezmoAbuelo!=="boolean")st.diezmoAbuelo=false;
+  return{...blank(),...d,movs:Array.isArray(d.movs)?d.movs:[],settings:st};
+}
+function load(){
+  try{const raw=localStorage.getItem(KEY);if(raw)return normalize(JSON.parse(raw));}catch(e){}
+  return mem||normalize({});
+}
+let S=load();
+function persist(){mem=S;try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist();}catch(e){}
+
 {const f=new Date().toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"});$("today").textContent=f[0].toUpperCase()+f.slice(1);}
 
 /* ---------- Sobres semanales (lunes a domingo) ---------- */
-const SOB_EM={diezmo:"🙏",comida:"🥗",camion:"🚌",ahorro:"🐷",negocio:"🧴"};
+const SOB_EM={diezmo:"🙏",membresias:"💳",comida:"🥗",camion:"🚌",ahorro:"🐷",negocio:"🧴"};
 const sobEm=x=>SOB_EM[x.id]||"✉️";
-const FIXED_SOB=["diezmo","ahorro"];
+const FIXED_SOB=["diezmo","membresias","ahorro"];
+const KEEP_SOB=["ahorro","membresias"];
 function weekStart(d){const x=d?new Date(d+"T12:00"):new Date();x.setDate(x.getDate()-((x.getDay()+6)%7));return ymd(x);}
 function weekEnd(ws){const x=new Date(ws+"T12:00");x.setDate(x.getDate()+6);return ymd(x);}
 function inWeek(ws){const we=weekEnd(ws);return S.movs.filter(m=>m.d>=ws&&m.d<=we);}
@@ -567,10 +597,31 @@ function negocioCats(){const n=sobById("negocio");return n?n.cats:CATS.gasto.fil
 function diezmoBase(ws){const ms=inWeek(ws),nc=negocioCats(),sum=f=>ms.filter(f).reduce((t,m)=>t+m.a,0);
   const beto=sum(m=>m.c==="trabajo-beto"),ventas=sum(m=>m.t==="venta"),inv=sum(m=>m.t==="gasto"&&nc.includes(m.c)),ab=S.settings.diezmoAbuelo?sum(m=>m.c==="abuelo"):0;
   return{beto,ventas,inv,ab,neto:Math.max(0,beto+ventas-inv+ab)};}
-function sobTarget(x,ws){return x.tipo==="porcentaje"?Math.round(diezmoBase(ws).neto*(+x.monto||0)/100):(+x.monto||0);}
+/* ---- Membresías ---- */
+const memActivas=()=>S.settings.membresias.filter(m=>m.activa);
+const memMensual=()=>memActivas().reduce((t,m)=>t+m.monto,0);
+const memSemanal=()=>Math.ceil(memMensual()*12/52);
+function lastDay(y,mo){return new Date(y,mo+1,0).getDate();}
+/* Fecha de cobro de una membresía en el mes de la fecha dada (si el mes es corto, el último día) */
+function memDue(m,ref){const d=new Date(ref+"T12:00"),y=d.getFullYear(),mo=d.getMonth();return ymd(new Date(y,mo,Math.min(m.dia,lastDay(y,mo))));}
+function memNext(m){const t=today();let due=memDue(m,t);if(due<t){const d=new Date(t+"T12:00");due=memDue(m,ymd(new Date(d.getFullYear(),d.getMonth()+1,1)));}return due;}
+function memPaid(m,due){const mk=monthKey(due);return S.movs.some(x=>x.t==="gasto"&&monthKey(x.d)===mk&&(x.mem===m.id||(!x.mem&&x.c===m.cat&&x.a===m.monto)));}
+/* Cobros que ya tocaron este mes y no están anotados */
+function memPendientes(){const t=today();return memActivas().filter(m=>m.monto>0).map(m=>({m,due:memDue(m,t)})).filter(({m,due})=>due<=t&&due>=m.desde&&!memPaid(m,due)&&!S.settings.memOmit.includes(m.id+"@"+monthKey(due)));}
+function memProximos(dias){const t=new Date(today()+"T12:00"),lim=new Date(t);lim.setDate(t.getDate()+dias);const L=ymd(lim);
+  return memActivas().filter(m=>m.monto>0).map(m=>({m,due:memNext(m)})).filter(x=>x.due>today()&&x.due<=L).sort((a,b)=>a.due.localeCompare(b.due));}
+function memFundedBefore(ws){return S.settings.repartos.filter(r=>r.sem<ws).reduce((t,r)=>t+(((r.partes||[]).find(p=>p.id==="membresias")||{}).a||0),0);}
+function memSpent(from,to){const x=sobById("membresias");if(!x)return 0;return S.movs.filter(m=>m.t==="gasto"&&x.cats.includes(m.c)&&m.d>=from&&m.d<=to).reduce((t,m)=>t+m.a,0);}
+function memSaldo(){const all=S.settings.repartos.reduce((t,r)=>t+(((r.partes||[]).find(p=>p.id==="membresias")||{}).a||0),0);return all-memSpent(S.settings.memDesde,"9999");}
+/* Meta de la semana: la parte semanal, o más si un cobro de esta semana no alcanza con lo apartado */
+function memTarget(ws){const we=weekEnd(ws),prev=memFundedBefore(ws)-memSpent(S.settings.memDesde,ymd(new Date(new Date(ws+"T12:00").getTime()-864e5)));
+  const due=memActivas().filter(m=>m.monto>0).reduce((t,m)=>{const d=memDue(m,ws),d2=memDue(m,we);return t+((d>=ws&&d<=we)?m.monto:0)+((d2!==d&&d2>=ws&&d2<=we)?m.monto:0);},0);
+  return Math.max(memSemanal(),Math.round(due-prev));}
+const fmtDay=d=>new Date(d+"T12:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"});
+function sobTarget(x,ws){return x.tipo==="porcentaje"?Math.round(diezmoBase(ws).neto*(+x.monto||0)/100):x.tipo==="membresias"?memTarget(ws):(+x.monto||0);}
 function sobFunded(id,ws){return S.settings.repartos.filter(r=>r.sem===ws).reduce((t,r)=>t+(((r.partes||[]).find(p=>p.id===id)||{}).a||0),0);}
 function sobSpent(x,ws){return inWeek(ws).filter(m=>m.t==="gasto"&&x.cats.includes(m.c)).reduce((t,m)=>t+m.a,0);}
-function sobInfo(x,ws){ws=ws||weekStart();const meta=sobTarget(x,ws),spent=sobSpent(x,ws),fund=sobFunded(x.id,ws),save=x.id==="ahorro";
+function sobInfo(x,ws){ws=ws||weekStart();const meta=sobTarget(x,ws),spent=sobSpent(x,ws),fund=sobFunded(x.id,ws),save=KEEP_SOB.includes(x.id);
   const pct=meta?spent/meta:(spent?2:0);
   return{x,meta,spent,fund,pct,save,st:save?"keep":pct>1?"over":pct>=.8?"warn":""};}
 function ahorroTotal(){const ah=sobById("ahorro");const inn=S.settings.repartos.reduce((t,r)=>t+(((r.partes||[]).find(p=>p.id==="ahorro")||{}).a||0),0);
@@ -580,7 +631,7 @@ function pendientes(){const ws=weekStart(),ids=repartidoIds();return inWeek(ws).
 const catNames=x=>x.cats.map(c=>(ALL[c]||{n:c}).n).join(", ");
 function daysLeftWeek(){return 7-((new Date().getDay()+6)%7);}
 
-/* Llena en orden: diezmo → comida → camión → ahorro → negocio. Lo que sobre va a Ahorro. */
+/* Llena en orden: diezmo → membresías → comida → camión → ahorro → negocio. Lo que sobre va a Ahorro. */
 function planReparto(monto,ws){let left=monto;
   const partes=S.settings.sobres.map(x=>{const meta=sobTarget(x,ws),need=Math.max(0,meta-sobFunded(x.id,ws)),a=Math.min(need,left);left-=a;return{id:x.id,a,falta:need-a,meta};});
   const ah=partes.find(p=>p.id==="ahorro");const sobra=left;if(ah&&left>0){ah.a+=left;ah.extra=left;}
@@ -603,15 +654,20 @@ function renderSobres(){const ws=weekStart(),we=weekEnd(ws),dl=daysLeftWeek();
   const anyRep=S.settings.repartos.some(r=>r.sem===ws);
   $("sobList").innerHTML=S.settings.sobres.map(x=>{const I=sobInfo(x,ws);let desc,line,fill="";
     if(x.tipo==="porcentaje"){const B=diezmoBase(ws);desc=(+x.monto||0)+" % de "+money(B.neto)+" de ganancia neta"+(S.settings.diezmoAbuelo?" (con abuelo)":"");}
+    else if(x.tipo==="membresias")desc="No se toca. "+(memMensual()?money(memMensual())+" al mes entre "+memActivas().length+(memActivas().length===1?" membresía":" membresías"):"Aún no anotas membresías");
     else if(I.save)desc="No se toca";
     else desc=x.cats.length?catNames(x):"Sin categorías";
-    if(I.save){line=I.meta?"Guardaste "+money(I.fund)+" de "+money(I.meta)+" esta semana.":"Guardaste "+money(I.fund)+" esta semana.";const T=ahorroTotal();if(T)line+=" En total llevas "+money(T)+".";}
+    if(x.tipo==="membresias"){const sal=memSaldo(),nx=memProximos(31)[0];
+      line=(sal>=0?"En el sobre hay "+money(sal)+".":"Pagaste "+money(-sal)+" más de lo apartado.");
+      if(nx){line+=" Próximo cobro: "+nx.m.nombre+" el "+fmtDay(nx.due)+" ("+money(nx.m.monto)+").";if(sal<nx.m.monto)line+=" Te faltan "+money(nx.m.monto-Math.max(0,sal))+".";}
+      else if(!memActivas().length)line="Anota tus membresías en Ajustes y aquí se aparta lo de cada semana.";}
+    else if(I.save){line=I.meta?"Guardaste "+money(I.fund)+" de "+money(I.meta)+" esta semana.":"Guardaste "+money(I.fund)+" esta semana.";const T=ahorroTotal();if(T)line+=" En total llevas "+money(T)+".";}
     else if(!I.meta)line=x.tipo==="porcentaje"?(I.spent?"Ya diste "+money(I.spent)+".":"Aún no hay ganancia esta semana."):(I.spent?"Gastaste "+money(I.spent)+" y no tiene monto.":"Sin monto. Pónselo en Ajustes.");
     else{const left=I.meta-I.spent;line=left>0?"Te quedan "+money(left)+(I.st==="warn"?". Ya vas cerca, ojo.":"."):left===0?"Llegaste justo al monto.":"Te pasaste por "+money(-left)+".";}
     if(anyRep&&I.meta){const f=I.meta-I.fund;if(f>0)fill='<span class="fill short num">Incompleto: faltan '+money(f)+' por llenar</span>';}
-    const big=I.save?I.fund:I.spent,w=I.save?(I.meta?I.fund/I.meta:0):(I.meta?I.pct:(I.spent?1:0));
+    const big=x.tipo==="membresias"?memSaldo():I.save?I.fund:I.spent,w=I.save?(I.meta?I.fund/I.meta:0):(I.meta?I.pct:(I.spent?1:0));
     return '<article class="sobre '+I.st+'"><div class="sobre-h"><div><h3>'+sobEm(x)+' '+esc(x.nombre)+'</h3><small>'+esc(desc)+'</small></div>'
-      +'<div class="amt num">'+money(big)+'<span>'+(I.meta?"de "+money(I.meta):"")+'</span></div></div>'
+      +'<div class="amt num">'+money(big)+'<span>'+(x.tipo==="membresias"?"en el sobre":I.meta?"de "+money(I.meta):"")+'</span></div></div>'
       +'<div class="bar"><i class="'+(I.save?"save-bar":I.st)+'" style="width:'+barW(w)+'"></i></div><p>'+line+'</p>'+fill+'</article>';}).join("");}
 $("sobPend").addEventListener("click",e=>{if(e.target.closest("#pendGo"))openRep(pendientes().map(m=>m.id));});
 
@@ -638,12 +694,12 @@ $("repGo").onclick=()=>{if(!R)return;const rec={id:uid(),movs:R.ids,d:R.d,sem:R.
 $("repLater").onclick=()=>{closePanel("repSheet");R=null;toast("Queda pendiente en Sobres");};
 
 /* ---------- Editor de sobres (Ajustes) ---------- */
-function sobSum(x){return (x.tipo==="porcentaje"?(+x.monto||0)+" % de tu ganancia neta":money(x.monto)+" a la semana")+" · "+(x.cats.length?x.cats.length+(x.cats.length===1?" categoría":" categorías"):"sin categorías");}
+function sobSum(x){return (x.tipo==="porcentaje"?(+x.monto||0)+" % de tu ganancia neta":x.tipo==="membresias"?money(memSemanal())+" a la semana (automático)":money(x.monto)+" a la semana")+" · "+(x.cats.length?x.cats.length+(x.cats.length===1?" categoría":" categorías"):"sin categorías");}
 function renderSobEd(){const open=new Set([...document.querySelectorAll("#sobEd details[open]")].map(d=>d.dataset.id));
   $("sobEd").innerHTML=S.settings.sobres.map(x=>{const pc=x.tipo==="porcentaje";
     return '<details data-id="'+esc(x.id)+'"'+(open.has(x.id)?" open":"")+'><summary><span>'+sobEm(x)+' '+esc(x.nombre)+'<small class="num">'+esc(sobSum(x))+'</small></span><span class="go" aria-hidden="true">›</span></summary><div class="sob-body">'
       +'<label class="field"><span>Nombre</span><input class="input" data-k="nombre" maxlength="30" value="'+esc(x.nombre)+'"></label>'
-      +'<label class="field"><span>'+(pc?"Porcentaje de tu ganancia neta de la semana":"Monto por semana")+'</span><input class="input num" data-k="monto" type="number" inputmode="numeric" min="0"'+(pc?' max="100"':'')+' value="'+(+x.monto||0)+'"></label>'
+      +(x.tipo==="membresias"?'<p class="help">Se calcula solo con tus membresías de abajo: lo que pagas al mes, repartido entre las semanas. Si un cobro cae esta semana y no alcanza, pide más.</p>':'<label class="field"><span>'+(pc?"Porcentaje de tu ganancia neta de la semana":"Monto por semana")+'</span><input class="input num" data-k="monto" type="number" inputmode="numeric" min="0"'+(pc?' max="100"':'')+' value="'+(+x.monto||0)+'"></label>')
       +(pc?'<p class="help">Ganancia neta = pago de Beto + ventas − inversión en negocio.</p><label class="sw"><span>Contar la quincena de mi abuelo<small>Si está apagado, el diezmo sale solo de lo que ganas tú.</small></span><input type="checkbox" data-k="abuelo"'+(S.settings.diezmoAbuelo?" checked":"")+'></label>':'')
       +'<div class="field"><span>Gastos que salen de este sobre</span><div class="cat-chips">'+CATS.gasto.map(c=>'<button data-c="'+c.id+'" aria-pressed="'+x.cats.includes(c.id)+'">'+c.em+' '+c.n+'</button>').join("")+'</div></div>'
       +(FIXED_SOB.includes(x.id)?'':'<button class="kill" data-kill="1">Quitar este sobre</button>')
@@ -663,6 +719,53 @@ $("sobEd").addEventListener("click",e=>{const b=e.target.closest("button");if(!b
   persist();renderSobEd();renderAll();});
 $("sobAdd").onclick=()=>{const x={id:"s"+uid(),nombre:"Sobre nuevo",monto:0,cats:[],tipo:"fijo"};S.settings.sobres.push(x);persist();renderSobEd();
   const d=document.querySelector('#sobEd details[data-id="'+x.id+'"]');if(d){d.open=true;const i=d.querySelector('[data-k=nombre]');i.focus();i.select();}renderAll();};
+
+/* ---------- Membresías: editor y avisos de cobro ---------- */
+const MEM_NEW={gym:{nombre:"Gym",cat:"gym"},claude:{nombre:"Claude",cat:"suscripciones"},otra:{nombre:"Membresía nueva",cat:"suscripciones"}};
+const memEm=m=>(ALL[m.cat]||{em:"🔁"}).em;
+function memSum(m){return m.activa?(m.monto?money(m.monto)+" al mes":"Gratis")+", cobra el día "+m.dia:"Cancelada";}
+function renderMemEd(){const open=new Set([...document.querySelectorAll("#memEd details[open]")].map(d=>d.dataset.id)),L=S.settings.membresias;
+  $("memEd").hidden=!L.length;
+  $("memEd").innerHTML=L.map(m=>'<details data-id="'+esc(m.id)+'"'+(open.has(m.id)?" open":"")+'><summary><span>'+memEm(m)+' '+esc(m.nombre)+'<small class="num">'+esc(memSum(m))+'</small></span><span class="go" aria-hidden="true">›</span></summary><div class="sob-body">'
+    +'<label class="field"><span>Nombre</span><input class="input" data-k="nombre" maxlength="30" value="'+esc(m.nombre)+'"></label>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label class="field"><span>Cuánto al mes</span><input class="input num" data-k="monto" type="number" inputmode="numeric" min="0" value="'+m.monto+'"></label>'
+    +'<label class="field"><span>Día de cobro</span><input class="input num" data-k="dia" type="number" inputmode="numeric" min="1" max="31" value="'+m.dia+'"></label></div>'
+    +'<div class="field"><span>Se anota como</span><div class="cat-chips">'+["gym","suscripciones"].map(c=>'<button data-mcat="'+c+'" aria-pressed="'+(m.cat===c)+'">'+ALL[c].em+' '+ALL[c].n+'</button>').join("")+'</div></div>'
+    +(m.activa?'<p class="help">Próximo cobro: '+fmtDay(memNext(m))+'.</p><button class="kill" data-act="cancel">Ya la cancelé</button>'
+      :'<div style="display:flex;gap:18px"><button class="kill" style="color:var(--leaf)" data-act="on">La volví a contratar</button><button class="kill" data-act="del">Borrarla</button></div>')
+    +'</div></details>').join("");
+  const mm=memMensual();$("memTot").textContent=mm?"Pagas "+money(mm)+" al mes. Se apartan "+money(memSemanal())+" cada semana.":"";}
+function edMem(el){const d=el.closest("details");return d&&S.settings.membresias.find(m=>m.id===d.dataset.id);}
+$("memEd").addEventListener("change",e=>{const m=edMem(e.target),k=e.target.dataset.k;if(!m||!k)return;
+  if(k==="nombre"){m.nombre=e.target.value.trim()||m.nombre;e.target.value=m.nombre;}
+  else if(k==="monto"){m.monto=Math.max(0,Math.round(+e.target.value||0));e.target.value=m.monto;}
+  else if(k==="dia"){m.dia=Math.min(31,Math.max(1,Math.round(+e.target.value||1)));e.target.value=m.dia;}
+  persist();const d=e.target.closest("details");d.querySelector("summary > span").firstChild.textContent=memEm(m)+" "+m.nombre;d.querySelector("summary small").textContent=memSum(m);
+  const mm=memMensual();$("memTot").textContent=mm?"Pagas "+money(mm)+" al mes. Se apartan "+money(memSemanal())+" cada semana.":"";
+  renderAll();toast("Membresía guardada");});
+$("memEd").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const m=edMem(b);if(!m)return;
+  if(b.dataset.mcat){m.cat=b.dataset.mcat;}
+  else if(b.dataset.act==="cancel"){if(!confirmTwice(b,"Toca otra vez si ya cancelaste "+m.nombre))return;m.activa=false;toast(m.nombre+" cancelada. Ya no se aparta para ella.");}
+  else if(b.dataset.act==="on"){m.activa=true;m.desde=today();toast(m.nombre+" activa otra vez");}
+  else if(b.dataset.act==="del"){if(!confirmTwice(b,"Toca otra vez para borrar "+m.nombre))return;S.settings.membresias=S.settings.membresias.filter(y=>y!==m);toast("Membresía borrada");}
+  else return;
+  persist();renderMemEd();renderSobEd();renderAll();});
+$("memAdd").addEventListener("click",e=>{const b=e.target.closest("[data-new]");if(!b)return;const N=MEM_NEW[b.dataset.new];
+  const m={id:"m"+uid(),nombre:N.nombre,monto:0,dia:new Date().getDate(),cat:N.cat,activa:true,desde:today()};
+  S.settings.membresias.push(m);persist();renderMemEd();
+  const d=document.querySelector('#memEd details[data-id="'+m.id+'"]');if(d){d.open=true;const i=d.querySelector(b.dataset.new==="otra"?"[data-k=nombre]":"[data-k=monto]");i.focus();i.select();}});
+
+function renderCobros(){const pend=memPendientes(),soon=memProximos(3);
+  const html=pend.map(({m,due})=>'<div class="cobro"><span class="ic">'+memEm(m)+'</span><b>'+(due===today()?"Hoy toca":"Ya tocó")+' el cobro de '+esc(m.nombre)+'</b><small class="num">'+money(m.monto)+(due===today()?"":", el "+fmtDay(due))+'</small><span class="acts"><button data-pay="'+m.id+'">Anotar</button><button data-skip="'+m.id+'">No se cobró</button></span></div>').join("")
+    +soon.map(({m,due})=>'<div class="cobro soon"><span class="ic">'+memEm(m)+'</span><b>'+esc(m.nombre)+' se cobra '+(Math.round((new Date(due+"T12:00")-new Date(today()+"T12:00"))/864e5)===1?"mañana":"el "+fmtDay(due))+'</b><small class="num">'+money(m.monto)+(memSaldo()>=m.monto?". Ya lo tienes apartado.":". En el sobre hay "+money(Math.max(0,memSaldo()))+".")+'</small></div>').join("");
+  $("cobrosIni").innerHTML=html;$("cobrosSob").innerHTML=html;}
+function onCobro(e){const b=e.target.closest("button");if(!b)return;
+  if(b.dataset.pay){const m=S.settings.membresias.find(x=>x.id===b.dataset.pay);if(!m)return;
+    const rec={id:uid(),t:"gasto",c:m.cat,a:m.monto,n:m.nombre,d:memDue(m,today()),at:Date.now(),mem:m.id};S.movs.push(rec);persist();renderAll();
+    toast("Cobro anotado: "+money(m.monto)+" de "+m.nombre,()=>{S.movs=S.movs.filter(x=>x.id!==rec.id);persist();renderAll();toast("Listo, se quitó");});}
+  else if(b.dataset.skip){const m=S.settings.membresias.find(x=>x.id===b.dataset.skip);if(!m)return;const key=m.id+"@"+monthKey(memDue(m,today()));
+    S.settings.memOmit.push(key);persist();renderAll();toast("Este mes no se anota "+m.nombre,()=>{S.settings.memOmit=S.settings.memOmit.filter(k=>k!==key);persist();renderAll();});}}
+$("cobrosIni").addEventListener("click",onCobro);$("cobrosSob").addEventListener("click",onCobro);
 
 /* ---------- Inicio ---------- */
 function haveNow(){return S.movs.reduce((s,m)=>s+(m.t==="gasto"?-m.a:m.a),0);}
@@ -792,12 +895,12 @@ $("bkCsv").onclick=()=>{
 $("bkLoad").addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;
   try{const d=JSON.parse(await f.text());if(!Array.isArray(d.movs))throw 0;
     if(!confirmTwice($("bkLoad").closest(".row"),"Toca otra vez para reemplazar"))return;
-    S=normalize(d);persist();renderSobEd();renderAll();toast("Respaldo cargado: "+S.movs.length+" movimientos");
+    S=normalize(d);persist();renderSobEd();renderMemEd();renderAll();toast("Respaldo cargado: "+S.movs.length+" movimientos");
   }catch(err){toast("Ese archivo no es un respaldo del panel");}
   e.target.value="";});
 let armed=null;
 function confirmTwice(el,msg){if(armed===el){armed=null;return true;}armed=el;toast(msg);setTimeout(()=>{if(armed===el)armed=null;},3500);return false;}
-$("wipe").onclick=()=>{if(!confirmTwice($("wipe"),"Toca otra vez \"Borrar todo\" para confirmar"))return;S=normalize({});persist();renderSobEd();renderAll();toast("Se borró todo");};
+$("wipe").onclick=()=>{if(!confirmTwice($("wipe"),"Toca otra vez \"Borrar todo\" para confirmar"))return;S=normalize({});persist();renderSobEd();renderMemEd();renderAll();toast("Se borró todo");};
 
 /* ---------- Temas ---------- */
 const THEMES=[["menta","Menta","#E7F0EA","#17352C"],["noche","Noche","#101C18","#E4EFE8"],["lila","Lila","#EEE9F5","#2E2342"],["cielo","Cielo","#E6EEF6","#1B2E45"]];
@@ -814,7 +917,7 @@ applyTheme(S.settings.theme);
 /* ---------- Navegación ---------- */
 const VIEWS=["inicio","movs","sobres","biz","mas"];
 function go(v){VIEWS.forEach(k=>$("v-"+k).hidden=k!==v);
-  if(v==="mas")renderSobEd();
+  if(v==="mas"){renderSobEd();renderMemEd();}
   document.querySelectorAll(".tab,.gear").forEach(t=>{if(t.dataset.v===v)t.setAttribute("aria-current","page");else t.removeAttribute("aria-current");});
   window.scrollTo(0,0);}
 document.querySelectorAll(".tab,.gear").forEach(t=>t.addEventListener("click",()=>go(t.dataset.v)));
@@ -864,7 +967,7 @@ $("picks").addEventListener("click",e=>{const b=e.target.closest(".pick");if(!b)
 
 let lastFocus=null;
 function adjMode(on){["seg","picks"].forEach(id=>$(id).hidden=on);$("sheetTitle").hidden=!on;$("sheetTitle").textContent="¿Cuánto dinero tienes ahora?";document.querySelector(".extra").hidden=on;}
-function openPanel(id){if(!document.querySelector(".sheet.open"))lastFocus=document.activeElement;
+function openPanel(id){if(!document.querySelector(".sheet.open"))lastFocus=document.activeElement;$("toast").classList.remove("show");
   $(id).classList.add("open");$("scrim").classList.add("open");$(id).setAttribute("aria-hidden","false");document.body.style.overflow="hidden";}
 function closePanel(id){$(id).classList.remove("open");$(id).setAttribute("aria-hidden","true");
   if(!document.querySelector(".sheet.open")){$("scrim").classList.remove("open");document.body.style.overflow="";if(lastFocus&&lastFocus.focus)lastFocus.focus({preventScroll:true});}}
@@ -930,8 +1033,8 @@ const standalone=matchMedia("(display-mode: standalone)").matches||navigator.sta
 if(!standalone&&/iPhone|iPad/.test(navigator.userAgent))$("installTip").hidden=false;
 try{if("serviceWorker" in navigator&&location.protocol==="https:"){navigator.serviceWorker.register("sw.js").catch(()=>{});}}catch(e){}
 
-function renderAll(){applyTheme(S.settings.theme);renderInicio();renderMovs();renderSobres();renderBiz();renderMas();}
-persist();renderSobEd();renderAll();
+function renderAll(){applyTheme(S.settings.theme);renderCobros();renderInicio();renderMovs();renderSobres();renderBiz();renderMas();}
+persist();renderSobEd();renderMemEd();renderAll();
 })();
 </script>
 </body>
