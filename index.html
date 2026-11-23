@@ -248,6 +248,33 @@ h2{font:700 18px/1.2 var(--round);margin:0}
 .cobro .acts button:first-child{background:var(--ink);color:var(--paper);font:700 14px var(--round);padding:8px 14px;border-radius:12px;transition:transform 140ms var(--ease-out)}
 .cobro .acts button:first-child:active{transform:scale(.96)}
 .cobro .acts button+button{font-size:12px;color:var(--ink-2);padding:2px 4px}
+.cobro.red{box-shadow:inset 0 0 0 1.5px var(--coral)}
+.cobro.red small{color:var(--coral);font-weight:600}
+.top .off{cursor:pointer}
+.top .off.pend i{background:var(--mango)}
+.mv .tx small .sy{margin-left:4px}
+/* Próximos cobros */
+.prox{display:flex;flex-direction:column}
+.prox .pr{display:grid;grid-template-columns:36px 1fr auto;gap:2px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--paper)}
+.prox .pr:first-child{border-top:0}
+.prox .ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-size:18px;background:var(--paper);grid-row:1/3}
+.prox b{font-weight:600;font-size:15px}
+.prox small{color:var(--ink-2);font-size:13px;grid-column:2}
+.prox .am{grid-row:1/3;grid-column:3;text-align:right;font:700 15px var(--round)}
+.prox .am small{display:block;font:500 12px var(--sans,inherit);color:var(--ink-2)}
+.prox .pr.red small,.prox .pr.red .am small{color:var(--coral);font-weight:600}
+.totline{display:flex;justify-content:space-between;gap:10px;font-size:14px;padding-top:10px;border-top:1px solid var(--paper);margin-top:4px}
+/* Bandeja Revisar */
+.sug{background:var(--sheet);border-radius:18px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;box-shadow:inset 0 0 0 1.5px var(--mango)}
+.sug b{font-weight:600;font-size:15px}
+.sug small{color:var(--ink-2);font-size:13px}
+.sug .acts{display:flex;gap:8px;align-items:center}
+.sug .acts .input{flex:1;padding:9px 12px}
+.sug .acts button{font:700 14px var(--round);padding:9px 14px;border-radius:12px}
+.sug .acts .ok{background:var(--ink);color:var(--paper)}
+.sug .acts .no{color:var(--ink-2)}
+.chk{display:flex;align-items:center;gap:10px;font-size:15px}
+.chk input{width:20px;height:20px;accent-color:var(--leaf)}
 .later{margin-top:6px;width:100%;height:44px;border-radius:14px;color:var(--ink-2);font-weight:600}
 /* Temas */
 .themes{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -344,6 +371,7 @@ h2{font:700 18px/1.2 var(--round);margin:0}
     </section>
 
     <div id="cobrosIni" class="cobros"></div>
+    <div id="revIni" class="cobros"></div>
     <section class="block" id="sobBlock">
       <div class="block-h"><h2>Tus sobres de la semana</h2><button class="link" id="sobSee">Ver sobres</button></div>
       <div class="mini" id="sobMini"></div>
@@ -384,8 +412,18 @@ h2{font:700 18px/1.2 var(--round);margin:0}
     <div><h1>Tus sobres</h1><p class="sub" id="sobSub"></p></div>
     <div id="sobPend"></div>
     <div id="cobrosSob" class="cobros"></div>
+    <section class="block" id="revBlock" hidden style="display:flex;flex-direction:column;gap:10px">
+      <div class="block-h" style="margin:0"><h2 id="revTitle">Revisar</h2></div>
+      <p class="help">Los encontré en tu Gmail. Escribe cuánto te cobran en pesos y toca Aceptar, o Ignorar si no es una suscripción.</p>
+      <div class="cobros" id="revList"></div>
+    </section>
     <div class="sobres" id="sobList"></div>
     <p class="help">Cada lunes empiezan de cero. Cambia montos y categorías en Ajustes.</p>
+    <section class="block" id="proxBlock">
+      <div class="block-h"><h2>Próximos cobros</h2></div>
+      <div class="prox" id="proxList"></div>
+      <div id="proxTot"></div>
+    </section>
   </main>
 
   <!-- NEGOCIOS -->
@@ -404,8 +442,8 @@ h2{font:700 18px/1.2 var(--round);margin:0}
       <button class="ghost" id="sobAdd">+ Agregar un sobre</button>
     </section>
     <section class="block" style="display:flex;flex-direction:column;gap:12px">
-      <h2>Tus membresías</h2>
-      <p class="help">Anota lo que pagas cada mes y el día que te lo cobran. Cada semana se aparta un poco en el sobre Membresías, y el día del cobro la app te avisa para anotarlo.</p>
+      <h2>Tus suscripciones</h2>
+      <p class="help">Anota cada cuánto te cobran y la fecha del próximo cobro. Cada semana se aparta un poco en el sobre Membresías (las anuales cuentan ÷ 12), y el día del cobro la app te avisa para anotarlo.</p>
       <div class="sob-ed" id="memEd"></div>
       <p class="help num" id="memTot"></p>
       <div class="cat-chips" id="memAdd"><button data-new="gym">+ Gym</button><button data-new="claude">+ Claude</button><button data-new="otra">+ Otra</button></div>
@@ -420,9 +458,19 @@ h2{font:700 18px/1.2 var(--round);margin:0}
       <label class="field"><span>Meta de ventas de este mes</span><input class="input num" id="setMeta" type="number" inputmode="numeric" min="0"></label>
       <p class="help">Se guarda solo al cambiarlo.</p>
     </section>
+    <section class="block" id="nube" style="display:flex;flex-direction:column;gap:12px">
+      <h2>Nube (Google)</h2>
+      <p class="help" id="cloudTxt"></p>
+      <label class="field"><span>Dirección del script (termina en /exec)</span><input class="input" id="cloudUrl" type="url" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec"></label>
+      <label class="field"><span>Clave secreta</span><input class="input" id="cloudKey" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="La que te dio el script"></label>
+      <div class="list" style="background:var(--paper)">
+        <button class="row" id="cloudNow"><span>Subir ahora<small id="cloudLast">Aún no se conecta</small></span><span class="go">›</span></button>
+        <button class="row" id="cloudPull"><span>Restaurar desde la nube<small>Reemplaza lo que hay en este celular</small></span><span class="go">›</span></button>
+      </div>
+    </section>
     <div>
       <h2 style="margin-bottom:10px">Respaldo</h2>
-      <p class="help" style="margin-bottom:10px">Tus datos viven solo en este celular. Haz un respaldo cada domingo y guárdalo en Archivos o mándatelo por WhatsApp.</p>
+      <p class="help" style="margin-bottom:10px">Tus datos viven en este celular (y en la nube si la conectas arriba). Igual puedes guardar un respaldo en Archivos o mandártelo por WhatsApp.</p>
       <div class="list">
         <button class="row" id="bkSave"><span>Guardar respaldo<small id="bkLast">Nunca has hecho uno</small></span><span class="go">›</span></button>
         <button class="row" id="bkCsv"><span>Exportar a Excel (CSV)<small>Para verlo en una hoja de cálculo</small></span><span class="go">›</span></button>
@@ -549,6 +597,18 @@ function defaultSobres(){return[
   {id:"negocio",nombre:"Inversión en negocio",monto:0,cats:["compra-perfumes","insumos-perfumes","apps-gasto"],tipo:"fijo"}];}
 /* Membresías: se apartan poquito a poco cada semana para que alcance el día del cobro */
 function MEM_SOBRE(){return{id:"membresias",nombre:"Membresías",monto:0,cats:["gym","suscripciones"],tipo:"membresias"};}
+/* Suscripciones: cada cuánto cobran */
+const FRECS=["semanal","mensual","anual","meses"];
+const isDay=s=>/^\d{4}-\d{2}-\d{2}$/.test(s||"");
+function addMonths(ds,n,dia){const d=new Date(ds+"T12:00"),y=d.getFullYear(),mo=d.getMonth()+n,L=new Date(y,mo+1,0).getDate();return ymd(new Date(y,mo,Math.min(dia||d.getDate(),L)));}
+function addDays(ds,n){const d=new Date(ds+"T12:00");d.setDate(d.getDate()+n);return ymd(d);}
+/* El cobro que sigue después de la fecha ds */
+function nextDate(m,ds){ds=ds||m.prox;return m.frec==="semanal"?addDays(ds,7):addMonths(ds,m.frec==="anual"?12:m.frec==="meses"?m.cada:1,m.dia);}
+/* Membresías viejas (solo "día de cobro"): calcula el próximo cobro sin perder lo que ya estaba pendiente */
+function legacyProx(m,movs,omit){const t=today(),d0=new Date(t+"T12:00");
+  const due=addMonths(ymd(new Date(d0.getFullYear(),d0.getMonth(),1)),0,m.dia);
+  const paid=movs.some(x=>x.t==="gasto"&&monthKey(x.d)===monthKey(due)&&(x.mem===m.id||(!x.mem&&x.c===m.cat&&x.a===m.monto)));
+  return(paid||due<(m.desde||t)||omit.includes(m.id+"@"+monthKey(due)))?addMonths(due,1,m.dia):due;}
 /* Acepta respaldos viejos: si no hay sobres los crea y pasa el "Límite de la semana" (settings.limit) a su sobre. */
 function normalize(d){
   d=d||{};const st={...blank().settings,...(d.settings||{})};
@@ -567,8 +627,14 @@ function normalize(d){
     st.sobres.forEach(x=>{x.cats=x.cats.filter(c=>!M.cats.includes(c));});
     const i=st.sobres.findIndex(x=>x.id==="diezmo");st.sobres.splice(i+1,0,M);}
   if(!st.memDesde)st.memDesde=ymd(new Date());
-  st.membresias=(Array.isArray(st.membresias)?st.membresias:[]).filter(m=>m&&m.id).map(m=>({...m,nombre:String(m.nombre||"Membresía"),monto:Math.max(0,+m.monto||0),dia:Math.min(31,Math.max(1,Math.round(+m.dia||1))),cat:m.cat||"suscripciones",activa:m.activa!==false,desde:m.desde||st.memDesde}));
   if(!Array.isArray(st.memOmit))st.memOmit=[];
+  if(!st.sugDec||typeof st.sugDec!=="object")st.sugDec={};
+  const movs0=Array.isArray(d.movs)?d.movs:[];
+  st.membresias=(Array.isArray(st.membresias)?st.membresias:[]).filter(m=>m&&m.id).map(m=>{
+    const o={...m,nombre:String(m.nombre||"Suscripción"),monto:Math.max(0,+m.monto||0),dia:Math.min(31,Math.max(1,Math.round(+m.dia||1))),cat:m.cat||"suscripciones",activa:m.activa!==false,desde:m.desde||st.memDesde,
+      frec:FRECS.includes(m.frec)?m.frec:"mensual",cada:Math.min(60,Math.max(1,Math.round(+m.cada||2))),prueba:!!m.prueba,finPrueba:isDay(m.finPrueba)?m.finPrueba:""};
+    if(!isDay(o.prox))o.prox=legacyProx(o,movs0,st.memOmit);
+    return o;});
   if(!Array.isArray(st.repartos))st.repartos=[];
   if(typeof st.diezmoAbuelo!=="boolean")st.diezmoAbuelo=false;
   return{...blank(),...d,movs:Array.isArray(d.movs)?d.movs:[],settings:st};
@@ -578,7 +644,9 @@ function load(){
   return mem||normalize({});
 }
 let S=load();
-function persist(){mem=S;try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+function persist(){mem=S;try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}
+  /* Ya quedó en el celular. Si hay nube, se sube en un momento (o cuando vuelva el internet). */
+  if(typeof paintSync==="function"){paintSync();if(cloudOn())scheduleSync();}}
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist();}catch(e){}
 
 {const f=new Date().toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"});$("today").textContent=f[0].toUpperCase()+f.slice(1);}
@@ -599,23 +667,23 @@ function diezmoBase(ws){const ms=inWeek(ws),nc=negocioCats(),sum=f=>ms.filter(f)
   return{beto,ventas,inv,ab,neto:Math.max(0,beto+ventas-inv+ab)};}
 /* ---- Membresías ---- */
 const memActivas=()=>S.settings.membresias.filter(m=>m.activa);
-const memMensual=()=>memActivas().reduce((t,m)=>t+m.monto,0);
+/* Lo que cuesta al mes: semanal ×52÷12, anual ÷12, cada X meses ÷X. Las pruebas gratis no cuentan hasta que cobran. */
+function porMes(m){return m.frec==="semanal"?m.monto*52/12:m.frec==="anual"?m.monto/12:m.frec==="meses"?m.monto/m.cada:m.monto;}
+const memMensual=()=>Math.round(memActivas().filter(m=>!m.prueba).reduce((t,m)=>t+porMes(m),0));
 const memSemanal=()=>Math.ceil(memMensual()*12/52);
-function lastDay(y,mo){return new Date(y,mo+1,0).getDate();}
-/* Fecha de cobro de una membresía en el mes de la fecha dada (si el mes es corto, el último día) */
-function memDue(m,ref){const d=new Date(ref+"T12:00"),y=d.getFullYear(),mo=d.getMonth();return ymd(new Date(y,mo,Math.min(m.dia,lastDay(y,mo))));}
-function memNext(m){const t=today();let due=memDue(m,t);if(due<t){const d=new Date(t+"T12:00");due=memDue(m,ymd(new Date(d.getFullYear(),d.getMonth()+1,1)));}return due;}
-function memPaid(m,due){const mk=monthKey(due);return S.movs.some(x=>x.t==="gasto"&&monthKey(x.d)===mk&&(x.mem===m.id||(!x.mem&&x.c===m.cat&&x.a===m.monto)));}
-/* Cobros que ya tocaron este mes y no están anotados */
-function memPendientes(){const t=today();return memActivas().filter(m=>m.monto>0).map(m=>({m,due:memDue(m,t)})).filter(({m,due})=>due<=t&&due>=m.desde&&!memPaid(m,due)&&!S.settings.memOmit.includes(m.id+"@"+monthKey(due)));}
-function memProximos(dias){const t=new Date(today()+"T12:00"),lim=new Date(t);lim.setDate(t.getDate()+dias);const L=ymd(lim);
-  return memActivas().filter(m=>m.monto>0).map(m=>({m,due:memNext(m)})).filter(x=>x.due>today()&&x.due<=L).sort((a,b)=>a.due.localeCompare(b.due));}
+const esGrande=m=>m.frec==="anual"||(m.frec==="meses"&&m.cada>=3);
+const daysTo=ds=>Math.round((new Date(ds+"T12:00")-new Date(today()+"T12:00"))/864e5);
+const frecTx=m=>m.frec==="meses"?"cada "+m.cada+" meses":m.frec;
+/* Cobros que ya tocaron y no están anotados */
+function memPendientes(){const t=today();return memActivas().filter(m=>m.monto>0&&m.prox<=t).map(m=>({m,due:m.prox}));}
+function memProximos(dias){const t=today(),L=addDays(t,dias);
+  return memActivas().filter(m=>m.monto>0&&m.prox>t&&m.prox<=L).map(m=>({m,due:m.prox})).sort((a,b)=>a.due.localeCompare(b.due));}
 function memFundedBefore(ws){return S.settings.repartos.filter(r=>r.sem<ws).reduce((t,r)=>t+(((r.partes||[]).find(p=>p.id==="membresias")||{}).a||0),0);}
 function memSpent(from,to){const x=sobById("membresias");if(!x)return 0;return S.movs.filter(m=>m.t==="gasto"&&x.cats.includes(m.c)&&m.d>=from&&m.d<=to).reduce((t,m)=>t+m.a,0);}
 function memSaldo(){const all=S.settings.repartos.reduce((t,r)=>t+(((r.partes||[]).find(p=>p.id==="membresias")||{}).a||0),0);return all-memSpent(S.settings.memDesde,"9999");}
 /* Meta de la semana: la parte semanal, o más si un cobro de esta semana no alcanza con lo apartado */
 function memTarget(ws){const we=weekEnd(ws),prev=memFundedBefore(ws)-memSpent(S.settings.memDesde,ymd(new Date(new Date(ws+"T12:00").getTime()-864e5)));
-  const due=memActivas().filter(m=>m.monto>0).reduce((t,m)=>{const d=memDue(m,ws),d2=memDue(m,we);return t+((d>=ws&&d<=we)?m.monto:0)+((d2!==d&&d2>=ws&&d2<=we)?m.monto:0);},0);
+  const due=memActivas().filter(m=>m.monto>0).reduce((t,m)=>{let d=m.prox,n=0;while(d<=we&&n++<60){if(d>=ws)t+=m.monto;d=nextDate(m,d);}return t;},0);
   return Math.max(memSemanal(),Math.round(due-prev));}
 const fmtDay=d=>new Date(d+"T12:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"});
 function sobTarget(x,ws){return x.tipo==="porcentaje"?Math.round(diezmoBase(ws).neto*(+x.monto||0)/100):x.tipo==="membresias"?memTarget(ws):(+x.monto||0);}
@@ -723,49 +791,169 @@ $("sobAdd").onclick=()=>{const x={id:"s"+uid(),nombre:"Sobre nuevo",monto:0,cats
 /* ---------- Membresías: editor y avisos de cobro ---------- */
 const MEM_NEW={gym:{nombre:"Gym",cat:"gym"},claude:{nombre:"Claude",cat:"suscripciones"},otra:{nombre:"Membresía nueva",cat:"suscripciones"}};
 const memEm=m=>(ALL[m.cat]||{em:"🔁"}).em;
-function memSum(m){return m.activa?(m.monto?money(m.monto)+" al mes":"Gratis")+", cobra el día "+m.dia:"Cancelada";}
+const FREC_LBL=[["semanal","Semanal"],["mensual","Mensual"],["anual","Anual"],["meses","Cada X meses"]];
+function memSum(m){if(!m.activa)return"Cancelada";
+  if(m.prueba)return"Prueba gratis"+(m.finPrueba?", cancela antes del "+fmtDay(m.finPrueba):"")+(m.monto?" · luego "+money(m.monto):"");
+  return(m.monto?money(m.monto)+" "+frecTx(m):"Gratis")+" · próximo "+fmtDay(m.prox);}
+function memTotTx(){const mm=memMensual();return mm?"Pagas "+money(mm)+" al mes (las anuales ÷ 12). Se apartan "+money(memSemanal())+" cada semana.":"";}
 function renderMemEd(){const open=new Set([...document.querySelectorAll("#memEd details[open]")].map(d=>d.dataset.id)),L=S.settings.membresias;
   $("memEd").hidden=!L.length;
   $("memEd").innerHTML=L.map(m=>'<details data-id="'+esc(m.id)+'"'+(open.has(m.id)?" open":"")+'><summary><span>'+memEm(m)+' '+esc(m.nombre)+'<small class="num">'+esc(memSum(m))+'</small></span><span class="go" aria-hidden="true">›</span></summary><div class="sob-body">'
     +'<label class="field"><span>Nombre</span><input class="input" data-k="nombre" maxlength="30" value="'+esc(m.nombre)+'"></label>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label class="field"><span>Cuánto al mes</span><input class="input num" data-k="monto" type="number" inputmode="numeric" min="0" value="'+m.monto+'"></label>'
-    +'<label class="field"><span>Día de cobro</span><input class="input num" data-k="dia" type="number" inputmode="numeric" min="1" max="31" value="'+m.dia+'"></label></div>'
+    +'<div class="field"><span>Cada cuánto cobra</span><div class="cat-chips">'+FREC_LBL.map(([k,n])=>'<button data-frec="'+k+'" aria-pressed="'+(m.frec===k)+'">'+n+'</button>').join("")+'</div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label class="field"><span>Cuánto cobra (pesos)</span><input class="input num" data-k="monto" type="number" inputmode="numeric" min="0" value="'+m.monto+'"></label>'
+    +(m.frec==="meses"?'<label class="field"><span>Cada cuántos meses</span><input class="input num" data-k="cada" type="number" inputmode="numeric" min="1" max="60" value="'+m.cada+'"></label>':'<span></span>')+'</div>'
+    +'<label class="field"><span>Fecha del próximo cobro</span><input class="input num" data-k="prox" type="date" value="'+m.prox+'"></label>'
+    +'<label class="chk"><input type="checkbox" data-k="prueba"'+(m.prueba?" checked":"")+'> Es prueba gratis</label>'
+    +(m.prueba?'<label class="field"><span>Cancelar la prueba antes del</span><input class="input num" data-k="finPrueba" type="date" value="'+m.finPrueba+'"></label>':'')
     +'<div class="field"><span>Se anota como</span><div class="cat-chips">'+["gym","suscripciones"].map(c=>'<button data-mcat="'+c+'" aria-pressed="'+(m.cat===c)+'">'+ALL[c].em+' '+ALL[c].n+'</button>').join("")+'</div></div>'
-    +(m.activa?'<p class="help">Próximo cobro: '+fmtDay(memNext(m))+'.</p><button class="kill" data-act="cancel">Ya la cancelé</button>'
+    +(m.activa?'<button class="kill" data-act="cancel">Ya la cancelé</button>'
       :'<div style="display:flex;gap:18px"><button class="kill" style="color:var(--leaf)" data-act="on">La volví a contratar</button><button class="kill" data-act="del">Borrarla</button></div>')
     +'</div></details>').join("");
-  const mm=memMensual();$("memTot").textContent=mm?"Pagas "+money(mm)+" al mes. Se apartan "+money(memSemanal())+" cada semana.":"";}
+  $("memTot").textContent=memTotTx();}
 function edMem(el){const d=el.closest("details");return d&&S.settings.membresias.find(m=>m.id===d.dataset.id);}
 $("memEd").addEventListener("change",e=>{const m=edMem(e.target),k=e.target.dataset.k;if(!m||!k)return;
   if(k==="nombre"){m.nombre=e.target.value.trim()||m.nombre;e.target.value=m.nombre;}
   else if(k==="monto"){m.monto=Math.max(0,Math.round(+e.target.value||0));e.target.value=m.monto;}
-  else if(k==="dia"){m.dia=Math.min(31,Math.max(1,Math.round(+e.target.value||1)));e.target.value=m.dia;}
+  else if(k==="cada"){m.cada=Math.min(60,Math.max(1,Math.round(+e.target.value||1)));e.target.value=m.cada;}
+  else if(k==="prox"){if(!isDay(e.target.value)){e.target.value=m.prox;return;}m.prox=e.target.value;m.dia=+m.prox.slice(8);}
+  else if(k==="finPrueba"){m.finPrueba=isDay(e.target.value)?e.target.value:"";}
+  else if(k==="prueba"){m.prueba=e.target.checked;persist();renderMemEd();renderAll();return;}
   persist();const d=e.target.closest("details");d.querySelector("summary > span").firstChild.textContent=memEm(m)+" "+m.nombre;d.querySelector("summary small").textContent=memSum(m);
-  const mm=memMensual();$("memTot").textContent=mm?"Pagas "+money(mm)+" al mes. Se apartan "+money(memSemanal())+" cada semana.":"";
-  renderAll();toast("Membresía guardada");});
+  $("memTot").textContent=memTotTx();
+  renderAll();toast("Suscripción guardada");});
 $("memEd").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const m=edMem(b);if(!m)return;
   if(b.dataset.mcat){m.cat=b.dataset.mcat;}
+  else if(b.dataset.frec){m.frec=b.dataset.frec;}
   else if(b.dataset.act==="cancel"){if(!confirmTwice(b,"Toca otra vez si ya cancelaste "+m.nombre))return;m.activa=false;toast(m.nombre+" cancelada. Ya no se aparta para ella.");}
   else if(b.dataset.act==="on"){m.activa=true;m.desde=today();toast(m.nombre+" activa otra vez");}
   else if(b.dataset.act==="del"){if(!confirmTwice(b,"Toca otra vez para borrar "+m.nombre))return;S.settings.membresias=S.settings.membresias.filter(y=>y!==m);toast("Membresía borrada");}
   else return;
   persist();renderMemEd();renderSobEd();renderAll();});
 $("memAdd").addEventListener("click",e=>{const b=e.target.closest("[data-new]");if(!b)return;const N=MEM_NEW[b.dataset.new];
-  const m={id:"m"+uid(),nombre:N.nombre,monto:0,dia:new Date().getDate(),cat:N.cat,activa:true,desde:today()};
+  const px=addMonths(today(),1);
+  const m={id:"m"+uid(),nombre:N.nombre,monto:0,dia:+px.slice(8),cat:N.cat,activa:true,desde:today(),frec:"mensual",cada:2,prox:px,prueba:false,finPrueba:""};
   S.settings.membresias.push(m);persist();renderMemEd();
   const d=document.querySelector('#memEd details[data-id="'+m.id+'"]');if(d){d.open=true;const i=d.querySelector(b.dataset.new==="otra"?"[data-k=nombre]":"[data-k=monto]");i.focus();i.select();}});
 
+function pruebasPorVencer(){return memActivas().filter(m=>m.prueba&&m.finPrueba&&daysTo(m.finPrueba)>=0&&daysTo(m.finPrueba)<=3);}
+const enDias=n=>n===0?"hoy":n===1?"mañana":"en "+n+" días";
 function renderCobros(){const pend=memPendientes(),soon=memProximos(3);
-  const html=pend.map(({m,due})=>'<div class="cobro"><span class="ic">'+memEm(m)+'</span><b>'+(due===today()?"Hoy toca":"Ya tocó")+' el cobro de '+esc(m.nombre)+'</b><small class="num">'+money(m.monto)+(due===today()?"":", el "+fmtDay(due))+'</small><span class="acts"><button data-pay="'+m.id+'">Anotar</button><button data-skip="'+m.id+'">No se cobró</button></span></div>').join("")
-    +soon.map(({m,due})=>'<div class="cobro soon"><span class="ic">'+memEm(m)+'</span><b>'+esc(m.nombre)+' se cobra '+(Math.round((new Date(due+"T12:00")-new Date(today()+"T12:00"))/864e5)===1?"mañana":"el "+fmtDay(due))+'</b><small class="num">'+money(m.monto)+(memSaldo()>=m.monto?". Ya lo tienes apartado.":". En el sobre hay "+money(Math.max(0,memSaldo()))+".")+'</small></div>').join("");
+  const html=pruebasPorVencer().map(m=>'<div class="cobro red"><span class="ic">⏰</span><b>Cancela la prueba de '+esc(m.nombre)+'</b><small>Vence '+enDias(daysTo(m.finPrueba))+' ('+fmtDay(m.finPrueba)+')'+(m.monto?'. Si no, te cobra '+money(m.monto):'')+'</small></div>').join("")
+    +pend.map(({m,due})=>'<div class="cobro"><span class="ic">'+memEm(m)+'</span><b>'+(due===today()?"Hoy toca":"Ya tocó")+' el cobro de '+esc(m.nombre)+'</b><small class="num">'+money(m.monto)+(due===today()?"":", el "+fmtDay(due))+'</small><span class="acts"><button data-pay="'+m.id+'">Anotar</button><button data-skip="'+m.id+'">No se cobró</button></span></div>').join("")
+    +soon.map(({m,due})=>'<div class="cobro soon red"><span class="ic">'+memEm(m)+'</span><b>'+esc(m.nombre)+' se cobra '+(Math.round((new Date(due+"T12:00")-new Date(today()+"T12:00"))/864e5)===1?"mañana":"el "+fmtDay(due))+'</b><small class="num">'+money(m.monto)+(memSaldo()>=m.monto?". Ya lo tienes apartado.":". En el sobre hay "+money(Math.max(0,memSaldo()))+".")+'</small></div>').join("");
   $("cobrosIni").innerHTML=html;$("cobrosSob").innerHTML=html;}
 function onCobro(e){const b=e.target.closest("button");if(!b)return;
-  if(b.dataset.pay){const m=S.settings.membresias.find(x=>x.id===b.dataset.pay);if(!m)return;
-    const rec={id:uid(),t:"gasto",c:m.cat,a:m.monto,n:m.nombre,d:memDue(m,today()),at:Date.now(),mem:m.id};S.movs.push(rec);persist();renderAll();
-    toast("Cobro anotado: "+money(m.monto)+" de "+m.nombre,()=>{S.movs=S.movs.filter(x=>x.id!==rec.id);persist();renderAll();toast("Listo, se quitó");});}
-  else if(b.dataset.skip){const m=S.settings.membresias.find(x=>x.id===b.dataset.skip);if(!m)return;const key=m.id+"@"+monthKey(memDue(m,today()));
-    S.settings.memOmit.push(key);persist();renderAll();toast("Este mes no se anota "+m.nombre,()=>{S.settings.memOmit=S.settings.memOmit.filter(k=>k!==key);persist();renderAll();});}}
+  const id=b.dataset.pay||b.dataset.skip,m=S.settings.membresias.find(x=>x.id===id);if(!m)return;
+  /* Después de cada cobro (o si no se cobró) la app calcula sola el siguiente */
+  const old={prox:m.prox,prueba:m.prueba},back=()=>{m.prox=old.prox;m.prueba=old.prueba;};
+  if(b.dataset.pay){
+    const rec={id:uid(),t:"gasto",c:m.cat,a:m.monto,n:m.nombre,d:m.prox,at:Date.now(),mem:m.id};S.movs.push(rec);
+    m.prox=nextDate(m);m.prueba=false;persist();renderAll();renderMemEd();
+    toast("Cobro anotado. El siguiente: "+fmtDay(m.prox),()=>{S.movs=S.movs.filter(x=>x.id!==rec.id);back();persist();renderAll();renderMemEd();toast("Listo, se quitó");});}
+  else{m.prox=nextDate(m);persist();renderAll();renderMemEd();
+    toast("No se anota. El siguiente: "+fmtDay(m.prox),()=>{back();persist();renderAll();renderMemEd();});}}
 $("cobrosIni").addEventListener("click",onCobro);$("cobrosSob").addEventListener("click",onCobro);
+
+/* ---------- Próximos cobros (ordenados por fecha) ---------- */
+function renderProx(){const L=memActivas().filter(m=>m.monto>0||m.prueba).slice().sort((a,b)=>a.prox.localeCompare(b.prox));
+  $("proxBlock").hidden=!L.length;if(!L.length)return;
+  $("proxList").innerHTML=L.map(m=>{const n=daysTo(m.prox),fp=m.prueba&&m.finPrueba?daysTo(m.finPrueba):null,red=n<=3||(fp!==null&&fp>=0&&fp<=3);
+    const sub=(m.prueba?"Prueba gratis"+(m.finPrueba?" · cancela antes del "+fmtDay(m.finPrueba):""):frecTx(m)[0].toUpperCase()+frecTx(m).slice(1))+" · "+fmtDay(m.prox);
+    return '<div class="pr'+(red?" red":"")+'"><span class="ic">'+memEm(m)+'</span><b>'+esc(m.nombre)+'</b><small>'+esc(sub)+'</small><span class="am num">'+money(m.monto)+'<small>'+(n<0?"ya pasó":enDias(n))+'</small></span></div>';}).join("");
+  const G=L.filter(esGrande),pr=L.filter(m=>m.prueba&&m.monto);
+  $("proxTot").innerHTML='<div class="totline"><span>Total al mes <small class="help">(anuales ÷ 12)</small></span><b class="num">'+money(memMensual())+'</b></div>'
+    +(pr.length?'<p class="help" style="margin-top:6px">Si no cancelas las pruebas: +'+money(Math.round(pr.reduce((t,m)=>t+porMes(m),0)))+' al mes.</p>':'')
+    +(G.length?'<p class="help" style="margin-top:10px"><b>Cobros grandes del año</b></p>'+G.map(m=>'<div class="totline" style="border:0;padding-top:4px"><span>'+esc(m.nombre)+' · '+fmtDay(m.prox)+'</span><b class="num">'+money(m.monto)+'</b></div>').join(""):'');}
+
+/* ---------- Nube: cola de sincronización ---------- */
+/* La clave y la URL viven aparte (no van en respaldos ni en la nube). */
+const CKEY="panel-santino:nube",SKEY="panel-santino:sync";
+function readJ(k,d){try{return{...d,...JSON.parse(localStorage.getItem(k)||"{}")};}catch(e){return d;}}
+function saveJ(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+let cloud=readJ(CKEY,{url:"",key:""}),sync=readJ(SKEY,{sig:{},stSig:"",last:0,sug:[],err:""}),syncing=false,syncT=null;
+function hash(s){let h=5381;for(let i=0;i<s.length;i++)h=((h*33)^s.charCodeAt(i))>>>0;return h.toString(36);}
+/* Cada movimiento tiene un id único: en la nube se reemplaza esa fila, nunca se duplica */
+const sigOf=m=>hash(JSON.stringify([m.d,m.t,m.c,m.a,m.n||"",m.mem||""]));
+const cloudOn=()=>!!(cloud.url&&cloud.key);
+function pendMovs(){return S.movs.filter(m=>sync.sig[m.id]!==sigOf(m));}
+function pendDel(){const ids=new Set(S.movs.map(m=>m.id));return Object.keys(sync.sig).filter(id=>!ids.has(id));}
+const pendIds=()=>new Set(pendMovs().map(m=>m.id));
+function isDirty(){return pendMovs().length>0||pendDel().length>0||hash(JSON.stringify(S))!==sync.stSig;}
+function movRow(m){const k=ALL[m.c]||{};return{id:m.id,fecha:m.d,tipo:m.t,categoria:k.n||m.c,negocio:k.biz?BIZ[k.biz].n:"",monto:m.a,nota:m.n||"",suscripcion:m.mem||"",actualizado:new Date(m.at||Date.now()).toISOString()};}
+function subRow(m){return{id:m.id,servicio:m.nombre,monto:m.monto,frecuencia:frecTx(m),proximo_cobro:m.prox,al_mes:Math.round(porMes(m)),prueba:m.prueba?"sí":"no",cancelar_prueba:m.finPrueba,activa:m.activa?"sí":"no",categoria:(ALL[m.cat]||{}).n||m.cat};}
+/* Resumen listo para tus agentes (Contador, Jefe de proyectos) */
+function resumen(){const mk=monthKey(today()),ms=inMonth(mk),sum=f=>ms.filter(f).reduce((t,m)=>t+m.a,0),by=t=>{const o={};ms.filter(m=>m.t===t).forEach(m=>{const n=(ALL[m.c]||{n:m.c}).n;o[n]=(o[n]||0)+m.a;});return o;};
+  const subs=memActivas().slice().sort((a,b)=>a.prox.localeCompare(b.prox));
+  return{fecha:today(),moneda:"MXN",tienesAhora:haveNow(),mes:mk,entroEsteMes:sum(isIn),gastasteEsteMes:sum(m=>m.t==="gasto"),
+    gastosPorCategoria:by("gasto"),ventasPorCategoria:by("venta"),ingresosPorCategoria:by("ingreso"),ahorro:ahorroTotal(),
+    sobresDeLaSemana:S.settings.sobres.map(x=>{const I=sobInfo(x);return{sobre:x.nombre,meta:I.meta,apartado:I.fund,gastado:I.spent};}),
+    suscripcionesAlMes:memMensual(),
+    proximosCobros:subs.map(m=>({servicio:m.nombre,monto:m.monto,frecuencia:frecTx(m),fecha:m.prox,pruebaGratis:m.prueba,cancelarAntesDe:m.finPrueba||null})),
+    cobrosGrandesDelAño:subs.filter(esGrande).map(m=>({servicio:m.nombre,monto:m.monto,fecha:m.prox}))};}
+async function api(body){
+  const r=await fetch(cloud.url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({...body,app:"mi-dinero",clave:cloud.key}),redirect:"follow"});
+  let j;try{j=await r.json();}catch(e){throw new Error("El script no respondió bien. Revisa la URL.");}
+  if(!j.ok)throw new Error(j.error||"Error del script");return j;}
+function scheduleSync(ms){clearTimeout(syncT);syncT=setTimeout(()=>syncNow(false),ms==null?1500:ms);}
+/* Sube lo pendiente. Si no hay nada pendiente, solo trae las sugerencias de Gmail. */
+async function syncNow(manual){
+  if(!cloudOn()){paintSync();if(manual)toast("Primero pon la URL y la clave");return;}
+  if(!navigator.onLine){paintSync();if(manual)toast("Sin internet. Se sube solo cuando vuelva");return;}
+  if(syncing)return;syncing=true;paintSync();
+  const movs=pendMovs(),del=pendDel(),sigs={},stS=hash(JSON.stringify(S));movs.forEach(m=>sigs[m.id]=sigOf(m));
+  const dirty=movs.length||del.length||stS!==sync.stSig;
+  try{
+    const j=dirty?await api({accion:"guardar",tablas:{movimientos:movs.map(movRow),suscripciones:S.settings.membresias.map(subRow)},reemplazar:["suscripciones"],borrados:{movimientos:del},estado:S,resumen:resumen(),decisiones:S.settings.sugDec})
+      :await api({accion:"sugeridas",decisiones:S.settings.sugDec});
+    if(dirty){movs.forEach(m=>{sync.sig[m.id]=sigs[m.id];});del.forEach(id=>{delete sync.sig[id];});sync.stSig=stS;sync.last=Date.now();}
+    if(Array.isArray(j.sugeridas))sync.sug=j.sugeridas;
+    sync.err="";if(manual)toast(dirty?"Listo, subido a la nube":"Ya estaba todo en la nube");
+  }catch(e){sync.err=String(e&&e.message||e);if(manual)toast("No se pudo subir: "+sync.err);}
+  syncing=false;saveJ(SKEY,sync);paintSync();renderMovs();renderRevisar();
+  if(!sync.err&&isDirty())scheduleSync(400);}
+function paintSync(){const on=navigator.onLine,el=$("net"),tx=el.lastElementChild,n=cloudOn()?pendIds().size+pendDel().length:0,dirty=cloudOn()&&isDirty();
+  el.classList.toggle("no",!on);el.classList.toggle("pend",on&&dirty);
+  tx.textContent=!on?(dirty?"Sin internet · ⏳ "+(n||"cambios")+" pendiente"+(n>1?"s":""):"Sin internet, se guarda igual")
+    :!cloudOn()?"En tu celular":syncing?"Subiendo…":dirty?(sync.err?"⏳ Pendiente (error)":"⏳ "+(n?n+" pendiente"+(n>1?"s":""):"Pendiente")):"✓ En la nube";
+  if($("cloudLast"))$("cloudLast").textContent=!cloudOn()?"Aún no se conecta":sync.err?"Error: "+sync.err:sync.last?"Última subida: "+new Date(sync.last).toLocaleString("es-MX",{day:"numeric",month:"short",hour:"numeric",minute:"2-digit"}):"Aún no se sube nada";
+  if($("cloudTxt"))$("cloudTxt").textContent=cloudOn()?"Conectada. Todo se guarda primero en tu celular y se sube solo cuando hay internet.":"Pega la URL del script y tu clave para guardar tus datos en tu Google Drive.";}
+function renderNube(){$("cloudUrl").value=cloud.url;$("cloudKey").value=cloud.key;paintSync();}
+$("cloudUrl").addEventListener("change",e=>{cloud.url=e.target.value.trim();saveJ(CKEY,cloud);paintSync();if(cloudOn())syncNow(true);});
+$("cloudKey").addEventListener("change",e=>{cloud.key=e.target.value.trim();saveJ(CKEY,cloud);paintSync();if(cloudOn())syncNow(true);});
+$("cloudNow").onclick=()=>syncNow(true);
+$("cloudPull").onclick=async()=>{if(!cloudOn())return toast("Primero pon la URL y la clave");if(!navigator.onLine)return toast("Necesitas internet para restaurar");
+  if(!confirmTwice($("cloudPull"),"Toca otra vez para reemplazar con lo de la nube"))return;
+  try{const j=await api({accion:"leer"});if(!j.estado||!Array.isArray(j.estado.movs))throw new Error("En la nube todavía no hay datos");
+    S=normalize(j.estado);sync.sig={};S.movs.forEach(m=>{sync.sig[m.id]=sigOf(m);});sync.stSig=hash(JSON.stringify(S));sync.err="";sync.last=Date.now();saveJ(SKEY,sync);
+    persist();renderSobEd();renderMemEd();renderAll();toast("Restaurado: "+S.movs.length+" movimientos");
+  }catch(e){toast("No se pudo: "+(e.message||e));}};
+$("net").addEventListener("click",()=>{go("mas");setTimeout(()=>$("nube").scrollIntoView({block:"start"}),50);});
+addEventListener("online",()=>{paintSync();scheduleSync(300);});
+addEventListener("offline",paintSync);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")scheduleSync(300);});
+setInterval(()=>{if(cloudOn()&&navigator.onLine&&!syncing&&isDirty())syncNow(false);},60000);
+
+/* ---------- Bandeja "Revisar": sugerencias de Gmail ---------- */
+function sugVis(){return(sync.sug||[]).filter(s=>s&&s.id&&!S.settings.sugDec[s.id]);}
+function renderRevisar(){const L=sugVis();$("revBlock").hidden=!L.length;
+  $("revIni").innerHTML=L.length?'<div class="cobro"><span class="ic">📬</span><b>'+L.length+(L.length===1?" suscripción":" suscripciones")+' por revisar</b><small>Las encontré en tu Gmail</small><span class="acts"><button data-rev="1">Ver</button></span></div>':"";
+  if(!L.length){$("revList").innerHTML="";return;}
+  $("revTitle").textContent="Revisar ("+L.length+")";
+  $("revList").innerHTML=L.map(s=>{const mx=String(s.moneda||"").toUpperCase()==="MXN";
+    return '<div class="sug" data-sid="'+esc(s.id)+'"><b>'+esc(s.servicio||"Servicio")+'</b><small class="num">'+esc((s.moneda||"")+" "+(s.monto??"?"))+' · '+esc(s.frecuencia||"mensual")+(String(s.prueba)==="sí"?" · prueba gratis":"")+(s.fecha?' · correo del '+esc(fmtDay(String(s.fecha).slice(0,10))):'')+'</small>'
+      +(s.asunto?'<small>'+esc(s.asunto)+'</small>':'')
+      +'<div class="acts"><input class="input num" type="number" inputmode="numeric" min="0" placeholder="Pesos" aria-label="Cuánto te cobran en pesos" value="'+(mx&&+s.monto?Math.round(+s.monto):"")+'"><button class="ok" data-ok="1">Aceptar</button><button class="no" data-no="1">Ignorar</button></div></div>';}).join("");}
+$("revIni").addEventListener("click",e=>{if(e.target.closest("[data-rev]")){go("sobres");setTimeout(()=>$("revBlock").scrollIntoView({block:"start"}),50);}});
+$("revList").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const card=b.closest(".sug"),s=(sync.sug||[]).find(x=>x.id===card.dataset.sid);if(!s)return;
+  if(b.dataset.no){S.settings.sugDec[s.id]="no";persist();renderRevisar();toast("Ignorada",()=>{delete S.settings.sugDec[s.id];persist();renderRevisar();});return;}
+  const pesos=Math.round(+card.querySelector("input").value||0),prueba=String(s.prueba)==="sí";
+  if(!(pesos>0)&&!prueba){card.querySelector("input").focus();return toast("Escribe cuánto te cobran en pesos");}
+  const frec=FRECS.includes(s.frecuencia)?s.frecuencia:"mensual",f0=isDay(String(s.fecha).slice(0,10))?String(s.fecha).slice(0,10):today();
+  const m={id:"m"+uid(),nombre:String(s.servicio||"Suscripción").slice(0,30),monto:pesos,dia:+f0.slice(8),cat:"suscripciones",activa:true,desde:today(),frec,cada:2,prox:f0,prueba,finPrueba:""};
+  let n=0;while(m.prox<=today()&&n++<200)m.prox=nextDate(m);   /* el cobro que sigue después del correo */
+  S.settings.membresias.push(m);S.settings.sugDec[s.id]="ok";persist();renderRevisar();renderMemEd();renderAll();
+  toast(m.nombre+" agregada. Próximo cobro: "+fmtDay(m.prox),()=>{S.settings.membresias=S.settings.membresias.filter(x=>x!==m);delete S.settings.sugDec[s.id];persist();renderRevisar();renderMemEd();renderAll();});});
 
 /* ---------- Inicio ---------- */
 function haveNow(){return S.movs.reduce((s,m)=>s+(m.t==="gasto"?-m.a:m.a),0);}
@@ -831,7 +1019,7 @@ $("filters").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!
   document.querySelectorAll(".chip").forEach(c=>c.setAttribute("aria-pressed",c===b));renderMovs();});
 function shiftMonth(n){const [y,m]=viewMonth.split("-").map(Number);const d=new Date(y,m-1+n,1);viewMonth=ymd(d).slice(0,7);renderMovs();}
 $("mPrev").onclick=()=>shiftMonth(-1);$("mNext").onclick=()=>shiftMonth(1);
-function renderMovs(){
+function renderMovs(){const P=cloudOn()?pendIds():new Set(),sy=x=>P.has(x.id)?'<span class="sy" title="Pendiente de subir">⏳</span>':"";
   const [y,m]=viewMonth.split("-").map(Number);
   {const t=new Date(y,m-1,1).toLocaleDateString("es-MX",{month:"long",year:"numeric"});$("mName").textContent=t[0].toUpperCase()+t.slice(1);}
   $("mNext").disabled=viewMonth>=monthKey(today());$("mNext").style.opacity=$("mNext").disabled?.3:1;
@@ -843,7 +1031,7 @@ function renderMovs(){
   const g={};ms.forEach(x=>(g[x.d]=g[x.d]||[]).push(x));
   $("movList").innerHTML=Object.keys(g).map(d=>{const tot=g[d].reduce((s,x)=>s+(x.t==="gasto"?-x.a:x.a),0);
     return '<div class="day-g"><h4>'+(d===today()?"Hoy":nice(d))+' · <span class="num">'+(tot>=0?"+":"−")+money(Math.abs(tot))+'</span></h4><ul class="moves">'
-    +g[d].map(x=>{const k=ALL[x.c]||{n:x.c,em:"•"};if(x.t==="ajuste")return '<li><button class="mv" data-id="'+x.id+'"><span class="ic">'+k.em+'</span><span class="tx"><b>Ajuste de saldo</b><small>Corrección a tu dinero real</small></span><span class="am num '+(x.a>=0?"in":"out")+'">'+(x.a>=0?"+":"−")+money(Math.abs(x.a))+'</span></button></li>';return '<li><button class="mv" data-id="'+x.id+'"><span class="ic">'+k.em+'</span><span class="tx"><b>'+esc(x.n||k.n)+'</b><small>'+esc(x.n?k.n:(T_LBL[x.t]==="gasto"?"Gasto":x.t==="venta"?"Venta":"Te dieron"))+'</small></span><span class="am num '+(isIn(x)?"in":"out")+'">'+(isIn(x)?"+":"−")+money(x.a)+'</span></button></li>';}).join("")+'</ul></div>';}).join("");
+    +g[d].map(x=>{const k=ALL[x.c]||{n:x.c,em:"•"};if(x.t==="ajuste")return '<li><button class="mv" data-id="'+x.id+'"><span class="ic">'+k.em+'</span><span class="tx"><b>Ajuste de saldo</b><small>Corrección a tu dinero real'+sy(x)+'</small></span><span class="am num '+(x.a>=0?"in":"out")+'">'+(x.a>=0?"+":"−")+money(Math.abs(x.a))+'</span></button></li>';return '<li><button class="mv" data-id="'+x.id+'"><span class="ic">'+k.em+'</span><span class="tx"><b>'+esc(x.n||k.n)+'</b><small>'+esc(x.n?k.n:(T_LBL[x.t]==="gasto"?"Gasto":x.t==="venta"?"Venta":"Te dieron"))+sy(x)+'</small></span><span class="am num '+(isIn(x)?"in":"out")+'">'+(isIn(x)?"+":"−")+money(x.a)+'</span></button></li>';}).join("")+'</ul></div>';}).join("");
 }
 $("movList").addEventListener("click",e=>{const b=e.target.closest(".mv");if(!b)return;const m=S.movs.find(x=>x.id===b.dataset.id);if(!m)return;
   if(m.t==="ajuste"){if(!confirmTwice(b,"Toca otra vez para borrar este ajuste"))return;S.movs=S.movs.filter(x=>x.id!==m.id);persist();renderAll();toast("Ajuste borrado",()=>{S.movs.push(m);persist();renderAll();});return;}
@@ -917,7 +1105,7 @@ applyTheme(S.settings.theme);
 /* ---------- Navegación ---------- */
 const VIEWS=["inicio","movs","sobres","biz","mas"];
 function go(v){VIEWS.forEach(k=>$("v-"+k).hidden=k!==v);
-  if(v==="mas"){renderSobEd();renderMemEd();}
+  if(v==="mas"){renderSobEd();renderMemEd();renderNube();}
   document.querySelectorAll(".tab,.gear").forEach(t=>{if(t.dataset.v===v)t.setAttribute("aria-current","page");else t.removeAttribute("aria-current");});
   window.scrollTo(0,0);}
 document.querySelectorAll(".tab,.gear").forEach(t=>t.addEventListener("click",()=>go(t.dataset.v)));
@@ -1027,14 +1215,13 @@ function toast(msg,undo){$("toastTx").textContent=msg;undoFn=undo||null;$("toast
 $("toastBtn").onclick=()=>{if(undoFn){const f=undoFn;undoFn=null;f();}};
 
 /* ---------- Estado de conexión e instalación ---------- */
-function net(){const on=navigator.onLine;$("net").classList.toggle("no",!on);$("net").lastElementChild.textContent=on?"En tu celular":"Sin internet, se guarda igual";}
-addEventListener("online",net);addEventListener("offline",net);net();
 const standalone=matchMedia("(display-mode: standalone)").matches||navigator.standalone;
 if(!standalone&&/iPhone|iPad/.test(navigator.userAgent))$("installTip").hidden=false;
 try{if("serviceWorker" in navigator&&location.protocol==="https:"){navigator.serviceWorker.register("sw.js").catch(()=>{});}}catch(e){}
 
-function renderAll(){applyTheme(S.settings.theme);renderCobros();renderInicio();renderMovs();renderSobres();renderBiz();renderMas();}
-persist();renderSobEd();renderMemEd();renderAll();
+function renderAll(){applyTheme(S.settings.theme);renderCobros();renderInicio();renderMovs();renderSobres();renderProx();renderRevisar();renderBiz();renderMas();paintSync();}
+persist();renderSobEd();renderMemEd();renderNube();renderAll();
+scheduleSync(800);
 })();
 </script>
 </body>
