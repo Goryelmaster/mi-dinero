@@ -93,9 +93,15 @@ function out_(o) {
 function guardar_(app, q) {
   // Protección: un celular vacío (app recién instalada) no borra lo que ya hay en la nube.
   const movsNuevos = q.estado && Array.isArray(q.estado.movs) ? q.estado.movs.length : -1;
-  if (movsNuevos === 0 && !q.forzar) {
+  // Mi día avisa con "vacio": true cuando el celular no tiene nada anotado
+  const vacio = app === "mi-dinero" ? movsNuevos === 0 : q.vacio === true;
+  if (vacio && !q.forzar) {
     const prev = leerJson_(app);
-    if (prev && prev.datos && Array.isArray(prev.datos.movs) && prev.datos.movs.length > 0) {
+    const d = prev && prev.datos;
+    const habia = d && (app === "mi-dinero"
+      ? Array.isArray(d.movs) && d.movs.length > 0
+      : (d.log && Object.keys(d.log).length > 1) || (Array.isArray(d.events) && d.events.length > 0));
+    if (habia) {
       return "La nube tiene datos y este celular está vacío. Toca \"Restaurar desde la nube\".";
     }
   }
@@ -207,7 +213,9 @@ function escribirJson_(app, q) {
   const doc = {
     app: app,
     actualizado: Utilities.formatDate(new Date(), tz, "yyyy-MM-dd'T'HH:mm:ssXXX"),
-    explicacion: "resumen = números listos para leer. datos = todo lo que hay en la app (movs = movimientos; settings.membresias = suscripciones).",
+    explicacion: app === "mi-dia"
+      ? "resumen = lo listo para leer (hoy, semana, empleados, horarios libres de la semana que viene, última revisión del domingo). datos = todo lo de la app (log = cada día: done, sec, mood, grat, sleep; events = semana; staff = empleados)."
+      : "resumen = números listos para leer. datos = todo lo que hay en la app (movs = movimientos; settings.membresias = suscripciones).",
     resumen: q.resumen || null,
     datos: q.estado
   };
