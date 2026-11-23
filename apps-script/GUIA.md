@@ -38,3 +38,10 @@ Pega el código nuevo → **Implementar → Administrar implementaciones** → �
 
 ## Para "Mi día" (después)
 Usa la misma URL y la misma clave. La app manda `"app": "mi-dia"` y el script crea solo **Mi día - datos** y **mi-dia-respaldo.json** en la misma carpeta.
+
+## Mi día → Google Calendar (automático)
+1. Pega el `Codigo.gs` nuevo en tu proyecto **API Santino** → 💾 Guardar.
+2. Arriba elige la función **sincronizarCalendario** → **▶ Ejecutar** → acepta el permiso nuevo de **Calendar** (mismos pasos del punto 6).
+3. **Implementar → Administrar implementaciones → ✏️ → Versión: Nueva versión → Implementar.** La URL no cambia.
+4. En Google Calendar aparece el calendario **Mi día** con tus empleados y tu rutina fija (aviso 5 min antes). Los 6 que se pusieron a mano en tu calendario principal se borran solos la primera vez.
+5. Desde ahora, cuando cambias un horario en Mi día, el calendario se actualiza solo la próxima vez que la app sube a la nube.

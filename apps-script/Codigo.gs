@@ -7,6 +7,7 @@
  *  - Escribe "<app>-respaldo.json" en la carpeta de Drive "Datos apps" (ahí lo leen tus agentes).
  *  - Guarda una copia por día en "Datos apps/respaldos".
  *  - Una vez al día busca en tu Gmail cobros de suscripciones y los deja como "sugeridas".
+ *  - Mi día: pone tus empleados y tu rutina fija en el calendario "Mi día" de Google Calendar.
  *
  * Primera vez: elige la función "instalar" arriba y toca ▶ Ejecutar. En "Registro de ejecución" sale tu clave.
  */
@@ -72,6 +73,7 @@ function doPost(e) {
         return out_({ ok: false, error: "Acción desconocida: " + q.accion });
       }
       const res = { ok: true };
+      if (app === "mi-dia") res.calendario = PropertiesService.getScriptProperties().getProperty("CAL_ESTADO") || "";
       if (app === "mi-dinero") {
         decisiones_(q.decisiones);
         res.sugeridas = sugeridas_();
@@ -120,7 +122,126 @@ function guardar_(app, q) {
     if (ids.length) borrar_(pestana_(ss, nombre), ids);
   });
   if (q.estado) escribirJson_(app, q);
+  // Mi día: empleados y rutina fija → calendario "Mi día" de Google (aviso 5 min antes)
+  if (app === "mi-dia" && q.estado) {
+    try { sincronizarCalendario_(q.estado); PropertiesService.getScriptProperties().setProperty("CAL_ESTADO", "ok"); }
+    catch (err) { PropertiesService.getScriptProperties().setProperty("CAL_ESTADO", "Error: " + String(err && err.message || err)); }
+  }
   return null;
+}
+
+/* ============ Google Calendar (Mi día) ============ */
+const CAL_NOMBRE = "Mi día";
+const DIAS_CAL = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+
+/** Córrela 1 vez desde el editor para dar permiso de Calendar y sincronizar con lo último que subió la app. */
+function sincronizarCalendario() {
+  const r = leerJson_("mi-dia");
+  if (!r || !r.datos) { Logger.log("Todavía no hay datos de Mi día en la nube. Abre la app con la nube conectada."); return; }
+  sincronizarCalendario_(r.datos);
+  PropertiesService.getScriptProperties().setProperty("CAL_ESTADO", "ok");
+  Logger.log("✅ Listo. Revisa el calendario \"" + CAL_NOMBRE + "\" en Google Calendar.");
+}
+
+/** Crea solo lo que cambió: compara cada evento con lo que ya subió (huella) y reemplaza esa serie. */
+function sincronizarCalendario_(estado) {
+  const tz = Session.getScriptTimeZone();
+  const p = PropertiesService.getScriptProperties();
+  const antes = JSON.parse(p.getProperty("CAL_MAPA") || "{}");
+  const items = itemsCalendario_(estado, tz);
+  const ahora = {};
+  let cal = null;
+  const C = function () { return cal || (cal = calendarioMiDia_(tz)); };
+  items.forEach(function (it) {
+    const huella = huella_(it);
+    const viejo = antes[it.key];
+    if (viejo && viejo.h === huella) { ahora[it.key] = viejo; return; }
+    if (viejo) borrarSerie_(C(), viejo.id);
+    ahora[it.key] = { id: crearSerie_(C(), it, tz).getId(), h: huella };
+  });
+  Object.keys(antes).forEach(function (k) { if (!ahora[k]) borrarSerie_(C(), antes[k].id); });
+  // Primera vez: quita los que se pusieron a mano en tu calendario principal con el mismo nombre
+  if (!p.getProperty("CAL_LIMPIO")) { quitarCopias_(items); p.setProperty("CAL_LIMPIO", "1"); }
+  p.setProperty("CAL_MAPA", JSON.stringify(ahora));
+}
+
+function itemsCalendario_(estado, tz) {
+  const hoy = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd");
+  const out = [];
+  (estado.staff || []).forEach(function (x) {
+    if (!x.days || !x.days.length || !x.t) return;
+    const hm = String(x.t).split(":"), s = (+hm[0]) * 60 + (+hm[1] || 0);
+    out.push({
+      key: "staff-" + x.id, titulo: x.em + " " + x.n + " · " + x.what, dias: x.days.slice().sort(),
+      s: s, e: Math.min(s + 15, 1439), fecha: primerDia_(x.days, hoy, tz), ex: [],
+      desc: "Pídele: " + x.p + "\n\nAbrir Claude: https://claude.ai/new?q=" + encodeURIComponent(x.p)
+    });
+  });
+  (estado.events || []).forEach(function (ev) {
+    if (!ev.rep || !ev.rep.length) return;
+    const desde = ev.from && ev.from > hoy ? ev.from : hoy, f = primerDia_(ev.rep, desde, tz);
+    out.push({
+      key: "ev-" + ev.id, titulo: ev.n, dias: ev.rep.slice().sort(), s: ev.s, e: ev.e, fecha: f,
+      ex: Object.keys(ev.ex || {}).filter(function (d) { return d >= f; }).sort(), desc: "De tu semana en Mi día"
+    });
+  });
+  return out;
+}
+
+function primerDia_(dias, desde, tz) {
+  const base = Utilities.parseDate(desde + " 12:00", tz, "yyyy-MM-dd HH:mm").getTime();
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(base + i * 864e5);
+    if (dias.indexOf(Number(Utilities.formatDate(d, tz, "u")) % 7) >= 0) return Utilities.formatDate(d, tz, "yyyy-MM-dd");
+  }
+  return desde;
+}
+
+const hhmm_ = function (m) { return ("0" + Math.floor(m / 60)).slice(-2) + ":" + ("0" + (m % 60)).slice(-2); };
+
+function huella_(it) {
+  const b = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify([it.titulo, it.dias, it.s, it.e, it.ex, it.desc]), Utilities.Charset.UTF_8);
+  return b.map(function (x) { return ((x + 256) % 256).toString(16); }).join("");
+}
+
+function calendarioMiDia_(tz) {
+  const p = PropertiesService.getScriptProperties();
+  const id = p.getProperty("CAL_ID");
+  if (id) { const c = CalendarApp.getCalendarById(id); if (c) return c; }
+  const c = CalendarApp.createCalendar(CAL_NOMBRE, { timeZone: tz, summary: "Tus empleados y tu rutina fija. Lo actualiza la app Mi día." });
+  p.setProperty("CAL_ID", c.getId());
+  p.deleteProperty("CAL_MAPA");
+  return c;
+}
+
+function crearSerie_(cal, it, tz) {
+  const f = "yyyy-MM-dd HH:mm";
+  const ini = Utilities.parseDate(it.fecha + " " + hhmm_(it.s), tz, f);
+  const fin = Utilities.parseDate(it.fecha + " " + hhmm_(it.e), tz, f);
+  const rec = CalendarApp.newRecurrence();
+  rec.addWeeklyRule().onlyOnWeekdays(it.dias.map(function (d) { return CalendarApp.Weekday[DIAS_CAL[d]]; }));
+  it.ex.forEach(function (d) { rec.addDateExclusion(Utilities.parseDate(d + " " + hhmm_(it.s), tz, f)); });
+  const serie = cal.createEventSeries(it.titulo, ini, fin, rec, { description: it.desc });
+  serie.removeAllReminders();
+  serie.addPopupReminder(5);
+  return serie;
+}
+
+function borrarSerie_(cal, id) {
+  try { const s = cal.getEventSeriesById(id); if (s) s.deleteEventSeries(); } catch (e) { /* ya no existe */ }
+}
+
+function quitarCopias_(items) {
+  const titulos = {};
+  items.forEach(function (it) { titulos[it.titulo] = true; });
+  const cal = CalendarApp.getDefaultCalendar(), hechas = {};
+  cal.getEvents(new Date(), new Date(Date.now() + 8 * 864e5)).forEach(function (ev) {
+    if (!titulos[ev.getTitle()] || !ev.isRecurringEvent()) return;
+    try {
+      const s = ev.getEventSeries(), id = s.getId();
+      if (!hechas[id]) { hechas[id] = true; s.deleteEventSeries(); }
+    } catch (e) { /* nada */ }
+  });
 }
 
 function pestana_(ss, nombre) {
