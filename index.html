@@ -362,6 +362,12 @@ h2{font:700 18px/1.2 var(--round);margin:0}
       </div>
     </section>
 
+    <button class="save" id="turnoBtn" style="margin-top:0">Registrar turno de hoy</button>
+    <div id="pagoIni" class="cobros"></div>
+    <section class="block" id="semBlock"></section>
+    <section class="block" id="cobrarBlock" hidden></section>
+    <button class="link" id="cobrarAdd0" hidden style="align-self:flex-start">+ Agregar algo por cobrar</button>
+
     <section class="quin" aria-live="polite">
       <svg class="ring" viewBox="0 0 52 52" aria-hidden="true">
         <circle cx="26" cy="26" r="22" fill="none" stroke="var(--quin-track)" stroke-width="6"/>
@@ -448,6 +454,14 @@ h2{font:700 18px/1.2 var(--round);margin:0}
       <p class="help num" id="memTot"></p>
       <div class="cat-chips" id="memAdd"><button data-new="gym">+ Gym</button><button data-new="claude">+ Claude</button><button data-new="otra">+ Otra</button></div>
     </section>
+    <section class="block" style="display:flex;flex-direction:column;gap:14px">
+      <h2>Trabajo (mesero)</h2>
+      <label class="field"><span>Sueldo semanal</span><input class="input num" id="setSueldo" type="number" inputmode="numeric" min="0"></label>
+      <label class="field"><span>Apoyo de camión por día</span><input class="input num" id="setCamion" type="number" inputmode="numeric" min="0"></label>
+      <label class="field"><span>Día de pago</span><select class="input" id="setDiaPago"><option value="1">Lunes</option><option value="2">Martes</option><option value="3">Miércoles</option><option value="4">Jueves</option><option value="5">Viernes</option><option value="6">Sábado</option><option value="0">Domingo</option></select></label>
+      <label class="field"><span>Meta del mes (lo que quieres ganar)</span><input class="input num" id="setMetaMes" type="number" inputmode="numeric" min="0"></label>
+      <p class="help">Se guarda solo al cambiarlo.</p>
+    </section>
     <section class="block" style="display:flex;flex-direction:column;gap:12px">
       <h2>Color de la app</h2>
       <div class="themes" id="themes" role="radiogroup" aria-label="Color de la app"></div>
@@ -525,6 +539,21 @@ h2{font:700 18px/1.2 var(--round);margin:0}
   <button class="later" id="repLater">Ahora no</button>
 </section>
 
+<!-- Hoja para registrar turno -->
+<section class="sheet" id="turnoSheet" role="dialog" aria-modal="true" aria-labelledby="turnoTitle" aria-hidden="true">
+  <div class="grab"></div>
+  <div class="rep-h"><small id="turnoTitle">Registrar turno</small></div>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <label class="field"><span>Fecha</span><input class="input num" id="tuFecha" type="date"></label>
+    <p class="help" id="tuWarn" hidden style="color:var(--coral)">Ya registraste un turno ese día; se sumará otro.</p>
+    <label class="field"><span>Propina ($)</span><input class="input num" id="tuProp" type="number" inputmode="numeric" min="0" placeholder="0"></label>
+    <label class="field"><span>Apoyo camión ($)</span><input class="input num" id="tuCam" type="number" inputmode="numeric" min="0" placeholder="0"></label>
+    <label class="field"><span>Horas extra (opcional)</span><input class="input num" id="tuExtra" type="number" inputmode="decimal" min="0" step="any" placeholder="0"></label>
+  </div>
+  <button class="save" id="tuGo">Guardar turno</button>
+  <button class="later" id="tuLater">Cancelar</button>
+</section>
+
 <div class="toast" id="toast" role="status"><span id="toastTx"></span><button id="toastBtn">Deshacer</button></div>
 
 <script>
@@ -559,7 +588,10 @@ const CATS={
     {id:"otra-venta",n:"Otra venta",em:"💵"}
   ],
   ingreso:[
-    {id:"trabajo-beto",n:"Beto (sábado)",em:"💼",hint:"Lo que te paga Beto cada sábado"},
+    {id:"trabajo-beto",n:"Beto (antes)",em:"💼",hint:"Lo que te paga Beto cada sábado",old:true},
+    {id:"mesero-sueldo",n:"Sueldo (mesero)",em:"🍽️",grupo:"Trabajo (mesero)",hint:"Tu sueldo semanal del restaurante"},
+    {id:"mesero-camion",n:"Apoyo camión",em:"🚌",grupo:"Trabajo (mesero)",hint:"$60 por día trabajado"},
+    {id:"mesero-propina",n:"Propina",em:"🪙",grupo:"Trabajo (mesero)",hint:"Propinas del turno"},
     {id:"abuelo",n:"Abuelo (quincena)",em:"👴"},
     {id:"regalo",n:"Regalo",em:"🎁"},
     {id:"otro-ingreso",n:"Otro",em:"✳️"}
@@ -636,14 +668,22 @@ function normalize(d){
     if(!isDay(o.prox))o.prox=legacyProx(o,movs0,st.memOmit);
     return o;});
   if(!Array.isArray(st.repartos))st.repartos=[];
+  {const T0=st.trabajo&&typeof st.trabajo==="object"?st.trabajo:{},nn=(v,df)=>typeof v==="number"&&isFinite(v)&&v>=0?v:df;
+    st.trabajo={...T0,sueldo:nn(T0.sueldo,1800),camion:nn(T0.camion,60),diaPago:Number.isInteger(T0.diaPago)&&T0.diaPago>=0&&T0.diaPago<=6?T0.diaPago:6,metaMes:nn(T0.metaMes,20000),inicio:isDay(T0.inicio)?T0.inicio:"2026-11-24",omit:Array.isArray(T0.omit)?T0.omit.filter(isDay):[]};
+    st.turnos=(Array.isArray(st.turnos)?st.turnos:[]).filter(t=>t&&t.id&&isDay(t.d)).map(t=>({...t,propina:Math.max(0,Math.round(+t.propina||0)),camion:Math.max(0,Math.round(+t.camion||0)),extra:Math.max(0,+t.extra||0),movs:Array.isArray(t.movs)?t.movs:[],at:+t.at||0}));
+    st.porCobrar=(Array.isArray(st.porCobrar)?st.porCobrar:[]).filter(x=>x&&x.id).map(x=>({...x,quien:String(x.quien||"Nuevo"),concepto:String(x.concepto||""),monto:typeof x.monto==="number"&&x.monto>0?x.monto:null,cat:x.cat||"otro-ingreso",creado:isDay(x.creado)?x.creado:ymd(new Date()),cobrada:!!x.cobrada,movId:x.movId||null,cobradaEl:x.cobradaEl||null}));
+    if(!st.seeds||typeof st.seeds!=="object"||Array.isArray(st.seeds))st.seeds={};}
   if(typeof st.diezmoAbuelo!=="boolean")st.diezmoAbuelo=false;
   return{...blank(),...d,movs:Array.isArray(d.movs)?d.movs:[],settings:st};
 }
 function load(){
-  try{const raw=localStorage.getItem(KEY);if(raw)return normalize(JSON.parse(raw));}catch(e){}
+  let raw=null;try{raw=localStorage.getItem(KEY);}catch(e){}
+  if(raw){try{return normalize(JSON.parse(raw));}catch(e){try{localStorage.setItem(KEY+":corrupto-"+Date.now(),raw);}catch(e2){}}}
   return mem||normalize({});
 }
-let S=load();
+/* Copia de seguridad única antes de la versión mesero */
+try{const r0=localStorage.getItem(KEY);if(r0&&!localStorage.getItem(KEY+":antes-mesero"))localStorage.setItem(KEY+":antes-mesero",r0);}catch(e){}
+let S=load();seedTrabajo();
 function persist(){mem=S;try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}
   /* Ya quedó en el celular. Si hay nube, se sube en un momento (o cuando vuelva el internet). */
   if(typeof paintSync==="function"){paintSync();if(cloudOn())scheduleSync();}}
@@ -661,10 +701,10 @@ function weekEnd(ws){const x=new Date(ws+"T12:00");x.setDate(x.getDate()+6);retu
 function inWeek(ws){const we=weekEnd(ws);return S.movs.filter(m=>m.d>=ws&&m.d<=we);}
 function sobById(id){return S.settings.sobres.find(x=>x.id===id);}
 function negocioCats(){const n=sobById("negocio");return n?n.cats:CATS.gasto.filter(c=>c.biz).map(c=>c.id);}
-/* Ganancia neta de la semana: Beto + ventas − inversión en negocio (+ abuelo si el interruptor está prendido) */
+/* Ganancia neta de la semana: sueldo y propinas (y Beto de antes) + ventas − inversión en negocio (+ abuelo si el interruptor está prendido). El apoyo de camión no cuenta. */
 function diezmoBase(ws){const ms=inWeek(ws),nc=negocioCats(),sum=f=>ms.filter(f).reduce((t,m)=>t+m.a,0);
-  const beto=sum(m=>m.c==="trabajo-beto"),ventas=sum(m=>m.t==="venta"),inv=sum(m=>m.t==="gasto"&&nc.includes(m.c)),ab=S.settings.diezmoAbuelo?sum(m=>m.c==="abuelo"):0;
-  return{beto,ventas,inv,ab,neto:Math.max(0,beto+ventas-inv+ab)};}
+  const trabajo=sum(m=>["trabajo-beto","mesero-sueldo","mesero-propina"].includes(m.c)),ventas=sum(m=>m.t==="venta"),inv=sum(m=>m.t==="gasto"&&nc.includes(m.c)),ab=S.settings.diezmoAbuelo?sum(m=>m.c==="abuelo"):0;
+  return{trabajo,ventas,inv,ab,neto:Math.max(0,trabajo+ventas-inv+ab)};}
 /* ---- Membresías ---- */
 const memActivas=()=>S.settings.membresias.filter(m=>m.activa);
 /* Lo que cuesta al mes: semanal ×52÷12, anual ÷12, cada X meses ÷X. Las pruebas gratis no cuentan hasta que cobran. */
@@ -768,7 +808,7 @@ function renderSobEd(){const open=new Set([...document.querySelectorAll("#sobEd 
     return '<details data-id="'+esc(x.id)+'"'+(open.has(x.id)?" open":"")+'><summary><span>'+sobEm(x)+' '+esc(x.nombre)+'<small class="num">'+esc(sobSum(x))+'</small></span><span class="go" aria-hidden="true">›</span></summary><div class="sob-body">'
       +'<label class="field"><span>Nombre</span><input class="input" data-k="nombre" maxlength="30" value="'+esc(x.nombre)+'"></label>'
       +(x.tipo==="membresias"?'<p class="help">Se calcula solo con tus membresías de abajo: lo que pagas al mes, repartido entre las semanas. Si un cobro cae esta semana y no alcanza, pide más.</p>':'<label class="field"><span>'+(pc?"Porcentaje de tu ganancia neta de la semana":"Monto por semana")+'</span><input class="input num" data-k="monto" type="number" inputmode="numeric" min="0"'+(pc?' max="100"':'')+' value="'+(+x.monto||0)+'"></label>')
-      +(pc?'<p class="help">Ganancia neta = pago de Beto + ventas − inversión en negocio.</p><label class="sw"><span>Contar la quincena de mi abuelo<small>Si está apagado, el diezmo sale solo de lo que ganas tú.</small></span><input type="checkbox" data-k="abuelo"'+(S.settings.diezmoAbuelo?" checked":"")+'></label>':'')
+      +(pc?'<p class="help">Ganancia neta = sueldo y propinas + ventas − inversión en negocio. El apoyo de camión no cuenta.</p><label class="sw"><span>Contar la quincena de mi abuelo<small>Si está apagado, el diezmo sale solo de lo que ganas tú.</small></span><input type="checkbox" data-k="abuelo"'+(S.settings.diezmoAbuelo?" checked":"")+'></label>':'')
       +'<div class="field"><span>Gastos que salen de este sobre</span><div class="cat-chips">'+CATS.gasto.map(c=>'<button data-c="'+c.id+'" aria-pressed="'+x.cats.includes(c.id)+'">'+c.em+' '+c.n+'</button>').join("")+'</div></div>'
       +(FIXED_SOB.includes(x.id)?'':'<button class="kill" data-kill="1">Quitar este sobre</button>')
       +'</div></details>';}).join("");}
@@ -890,7 +930,8 @@ function resumen(){const mk=monthKey(today()),ms=inMonth(mk),sum=f=>ms.filter(f)
     sobresDeLaSemana:S.settings.sobres.map(x=>{const I=sobInfo(x);return{sobre:x.nombre,meta:I.meta,apartado:I.fund,gastado:I.spent};}),
     suscripcionesAlMes:memMensual(),
     proximosCobros:subs.map(m=>({servicio:m.nombre,monto:m.monto,frecuencia:frecTx(m),fecha:m.prox,pruebaGratis:m.prueba,cancelarAntesDe:m.finPrueba||null})),
-    cobrosGrandesDelAño:subs.filter(esGrande).map(m=>({servicio:m.nombre,monto:m.monto,fecha:m.prox}))};}
+    cobrosGrandesDelAño:subs.filter(esGrande).map(m=>({servicio:m.nombre,monto:m.monto,fecha:m.prox})),
+    trabajo:(()=>{const W=semTrabajo();return{semana:{inicio:W.ws,sueldo:W.su,camion:W.ca,propinas:W.pr,dias:W.dias},porCobrar:S.settings.porCobrar.filter(x=>!x.cobrada).map(x=>({quien:x.quien,concepto:x.concepto,monto:x.monto}))};})()};}
 async function api(body){
   const r=await fetch(cloud.url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({...body,app:"mi-dinero",clave:cloud.key}),redirect:"follow"});
   let j;try{j=await r.json();}catch(e){throw new Error("El script no respondió bien. Revisa la URL.");}
@@ -926,7 +967,7 @@ $("cloudPull").onclick=async()=>{if(!cloudOn())return toast("Primero pon la URL 
   if(!confirmTwice($("cloudPull"),"Toca otra vez para reemplazar con lo de la nube"))return;
   try{const j=await api({accion:"leer"});if(!j.estado||!Array.isArray(j.estado.movs))throw new Error("En la nube todavía no hay datos");
     S=normalize(j.estado);sync.sig={};S.movs.forEach(m=>{sync.sig[m.id]=sigOf(m);});sync.stSig=hash(JSON.stringify(S));sync.err="";sync.last=Date.now();saveJ(SKEY,sync);
-    persist();renderSobEd();renderMemEd();renderAll();toast("Restaurado: "+S.movs.length+" movimientos");
+    seedTrabajo();persist();renderSobEd();renderMemEd();renderAll();toast("Restaurado: "+S.movs.length+" movimientos");
   }catch(e){toast("No se pudo: "+(e.message||e));}};
 $("net").addEventListener("click",()=>{go("mas");setTimeout(()=>$("nube").scrollIntoView({block:"start"}),50);});
 addEventListener("online",()=>{paintSync();scheduleSync(300);});
@@ -1060,6 +1101,7 @@ function renderBiz(){
 function renderMas(){
   $("setQuin").value=S.settings.quin||"";
   $("setMeta").value=meta(monthKey(today()));
+  {const T=S.settings.trabajo;$("setSueldo").value=T.sueldo;$("setCamion").value=T.camion;$("setDiaPago").value=T.diaPago;$("setMetaMes").value=T.metaMes;}
   $("bkLast").textContent=S.lastBackup?"Último: "+new Date(S.lastBackup).toLocaleDateString("es-MX",{day:"numeric",month:"long"}):"Nunca has hecho uno";
   $("countTxt").textContent=S.movs.length?"Llevas "+S.movs.length+" movimientos anotados.":"";
 }
@@ -1083,12 +1125,12 @@ $("bkCsv").onclick=()=>{
 $("bkLoad").addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;
   try{const d=JSON.parse(await f.text());if(!Array.isArray(d.movs))throw 0;
     if(!confirmTwice($("bkLoad").closest(".row"),"Toca otra vez para reemplazar"))return;
-    S=normalize(d);persist();renderSobEd();renderMemEd();renderAll();toast("Respaldo cargado: "+S.movs.length+" movimientos");
+    S=normalize(d);seedTrabajo();persist();renderSobEd();renderMemEd();renderAll();toast("Respaldo cargado: "+S.movs.length+" movimientos");
   }catch(err){toast("Ese archivo no es un respaldo del panel");}
   e.target.value="";});
 let armed=null;
 function confirmTwice(el,msg){if(armed===el){armed=null;return true;}armed=el;toast(msg);setTimeout(()=>{if(armed===el)armed=null;},3500);return false;}
-$("wipe").onclick=()=>{if(!confirmTwice($("wipe"),"Toca otra vez \"Borrar todo\" para confirmar"))return;S=normalize({});persist();renderSobEd();renderMemEd();renderAll();toast("Se borró todo");};
+$("wipe").onclick=()=>{if(!confirmTwice($("wipe"),"Toca otra vez \"Borrar todo\" para confirmar"))return;S=normalize({});S.settings.seeds={porCobrarBeto:true,turno20261124:true,betoOff:true};persist();renderSobEd();renderMemEd();renderAll();toast("Se borró todo");};
 
 /* ---------- Temas ---------- */
 const THEMES=[["menta","Menta","#E7F0EA","#17352C"],["noche","Noche","#101C18","#E4EFE8"],["lila","Lila","#EEE9F5","#2E2342"],["cielo","Cielo","#E6EEF6","#1B2E45"]];
@@ -1134,6 +1176,8 @@ function paintAmt(bump){const v=+F.a||0, el=$("amt");el.textContent=money(v);el.
 /* Ingreso sugerido: abuelo = su quincena, Beto = lo último que te pagó */
 function prefill(c){if(F.id||(F.a&&!F.auto))return;let v=0;
   if(c==="abuelo")v=S.settings.quin||0;
+  else if(c==="mesero-sueldo")v=S.settings.trabajo.sueldo;
+  else if(c==="mesero-camion")v=S.settings.trabajo.camion;
   else if(c==="trabajo-beto"){const l=S.movs.filter(m=>m.c==="trabajo-beto").sort((a,b)=>b.d.localeCompare(a.d)||b.at-a.at)[0];v=l?l.a:0;}
   if(v){F.a=String(v);F.auto=true;}else if(F.auto){F.a="";F.auto=false;}}
 function setType(t,keepCat){
@@ -1143,8 +1187,8 @@ function setType(t,keepCat){
   $("pill").style.transform="translateX("+(idx*100)+"%)";
   $("pill").style.background=t==="gasto"?"var(--coral)":"var(--leaf)";
   document.querySelectorAll("#seg button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.t===t));
-  if(!keepCat)F.c=CATS[t].length===1?CATS[t][0].id:(t==="ingreso"?(new Date().getDay()===6?"trabajo-beto":"abuelo"):null);
-  $("picks").innerHTML=CATS[t].map(c=>'<button class="pick" data-c="'+c.id+'" aria-pressed="'+(c.id===F.c)+'"><span>'+c.em+'</span>'+c.n+'</button>').join("");
+  if(!keepCat)F.c=CATS[t].length===1?CATS[t][0].id:(t==="ingreso"?"mesero-propina":null);
+  $("picks").innerHTML=CATS[t].filter(c=>!c.old||c.id===F.c).map(c=>'<button class="pick" data-c="'+c.id+'" aria-pressed="'+(c.id===F.c)+'"><span>'+c.em+'</span>'+c.n+'</button>').join("");
   if(!keepCat&&t==="ingreso")prefill(F.c);
   $("note").placeholder=t==="gasto"?"Nota (opcional): ej. 3 frascos de 10 ml":t==="venta"?"Nota (opcional): ej. Club de Nuit a Juan":"Nota (opcional)";
   paintAmt(false);}
@@ -1159,7 +1203,7 @@ function openPanel(id){if(!document.querySelector(".sheet.open"))lastFocus=docum
   $(id).classList.add("open");$("scrim").classList.add("open");$(id).setAttribute("aria-hidden","false");document.body.style.overflow="hidden";}
 function closePanel(id){$(id).classList.remove("open");$(id).setAttribute("aria-hidden","true");
   if(!document.querySelector(".sheet.open")){$("scrim").classList.remove("open");document.body.style.overflow="";if(lastFocus&&lastFocus.focus)lastFocus.focus({preventScroll:true});}}
-function closeAll(){if($("repSheet").classList.contains("open")){R=null;closePanel("repSheet");}if($("sheet").classList.contains("open"))closeSheet();}
+function closeAll(){if($("turnoSheet").classList.contains("open"))closePanel("turnoSheet");if($("repSheet").classList.contains("open")){R=null;closePanel("repSheet");}if($("sheet").classList.contains("open"))closeSheet();}
 function openAdjust(){F={t:"ajuste",c:"ajuste",a:"",id:null,auto:false};adjMode(true);$("delMv").hidden=true;$("saveOnly").hidden=true;paintAmt(false);openPanel("sheet");}
 $("adjBtn").onclick=openAdjust;
 function openSheet(m){adjMode(false);
@@ -1172,7 +1216,7 @@ $("scrim").onclick=closeAll;
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeAll();});
 
 // Deslizar hacia abajo para cerrar
-["sheet","repSheet"].forEach(id=>{const sh=$(id);let y0=null,t0=0,dy=0;
+["sheet","repSheet","turnoSheet"].forEach(id=>{const sh=$(id);let y0=null,t0=0,dy=0;
   sh.addEventListener("touchstart",e=>{if(sh.scrollTop>0||e.target.closest(".pad,.picks,input"))return;y0=e.touches[0].clientY;t0=Date.now();dy=0;sh.style.transition="none";},{passive:true});
   sh.addEventListener("touchmove",e=>{if(y0===null)return;dy=Math.max(0,e.touches[0].clientY-y0);sh.style.transform="translateY("+dy+"px)";},{passive:true});
   sh.addEventListener("touchend",()=>{if(y0===null)return;sh.style.transition="";sh.style.transform="";
@@ -1202,11 +1246,97 @@ function saveMov(repartir){
 $("save").onclick=()=>saveMov(true);
 $("saveOnly").onclick=()=>saveMov(false);
 $("delMv").onclick=()=>{if(!confirmTwice($("delMv"),"Toca otra vez para borrar"))return;
-  const old=S.movs.find(x=>x.id===F.id),oldReps=JSON.parse(JSON.stringify(S.settings.repartos));
+  const old=S.movs.find(x=>x.id===F.id),oldReps=JSON.parse(JSON.stringify(S.settings.repartos)),oldTur=JSON.parse(JSON.stringify(S.settings.turnos));
   S.movs=S.movs.filter(x=>x.id!==F.id);
+  S.settings.turnos=S.settings.turnos.filter(t=>{if(!t.movs.includes(old.id))return true;t.movs=t.movs.filter(i=>i!==old.id);return t.movs.length>0;});
   S.settings.repartos=S.settings.repartos.map(r=>({...r,movs:(r.movs||[]).filter(i=>i!==old.id)})).filter(r=>r.movs.length);
   persist();closeSheet();renderAll();
-  toast("Movimiento borrado",()=>{S.movs.push(old);S.settings.repartos=oldReps;persist();renderAll();});};
+  toast("Movimiento borrado",()=>{S.movs.push(old);S.settings.repartos=oldReps;S.settings.turnos=oldTur;persist();renderAll();});};
+
+/* ---------- Trabajo (mesero): turnos, pago, por cobrar ---------- */
+/* Crea los movs del turno (propina y apoyo de camión) y el reparto automático del camión. Lo usa la hoja y el seed. */
+function crearTurno(d,propina,camion,extra){
+  const movs=[],ex=extra>0?" · "+extra+" h extra":"";let rep=null;
+  const mk=(c,a,n)=>{const m={id:uid(),t:"ingreso",c,a,n,d,at:Date.now()};S.movs.push(m);movs.push(m.id);return m;};
+  if(propina>0)mk("mesero-propina",propina,"Turno"+ex);
+  if(camion>0){const m=mk("mesero-camion",camion,"Turno"+(propina>0?"":ex));
+    if(sobById("camion")){rep={id:uid(),movs:[m.id],d:m.d,sem:weekStart(m.d),monto:m.a,partes:[{id:"camion",a:m.a,falta:0}],at:Date.now(),auto:true};S.settings.repartos.push(rep);}}
+  const t={id:uid(),d,propina,camion,extra,movs,at:Date.now()};S.settings.turnos.push(t);
+  return{t,rep};}
+function quitarTurno(r){S.movs=S.movs.filter(m=>!r.t.movs.includes(m.id));
+  S.settings.repartos=S.settings.repartos.filter(x=>!r.rep||x.id!==r.rep.id);S.settings.turnos=S.settings.turnos.filter(x=>x.id!==r.t.id);}
+/* Siembra única (con bandera y revisión de duplicados). Guarda directo: aún no existe la nube al arrancar. */
+function seedTrabajo(){const sd=S.settings.seeds;let ch=false;
+  if(!sd.porCobrarBeto){sd.porCobrarBeto=true;ch=true;
+    if(!S.settings.porCobrar.some(x=>x.quien.trim().toLowerCase()==="beto"))S.settings.porCobrar.push({id:uid(),quien:"Beto",concepto:"1 día pendiente",monto:null,cat:"trabajo-beto",creado:today(),cobrada:false,movId:null,cobradaEl:null});}
+  if(!sd.turno20261124){sd.turno20261124=true;ch=true;
+    if(!S.settings.turnos.some(t=>t.d==="2026-11-24")&&!S.movs.some(m=>m.c==="mesero-propina"&&m.d==="2026-11-24"))crearTurno("2026-11-24",120,60,0);}
+  if(!sd.betoOff){sd.betoOff=true;ch=true;S.settings.membresias.forEach(m=>{if(/beto/i.test(m.nombre))m.activa=false;});}
+  if(ch){mem=S;try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}}
+function semTrabajo(){const ws=weekStart(),we=weekEnd(ws),ms=inWeek(ws),s=c=>ms.filter(m=>m.c===c).reduce((t,m)=>t+m.a,0);
+  const tur=S.settings.turnos.filter(t=>t.d>=ws&&t.d<=we);
+  return{ws,su:s("mesero-sueldo"),ca:s("mesero-camion"),pr:s("mesero-propina"),dias:new Set(tur.map(t=>t.d)).size,hx:tur.reduce((t,x)=>t+(+x.extra||0),0),hay:tur.length>0};}
+
+function renderTrabajo(){const T=S.settings.trabajo,W=semTrabajo(),tot=W.su+W.ca+W.pr;
+  /* Día de pago */
+  const pd=addDays(W.ws,(T.diaPago+6)%7);
+  const showPago=T.sueldo>0&&today()>=pd&&!T.omit.includes(W.ws)&&!W.su&&W.hay&&W.ws>=weekStart(T.inicio);
+  $("pagoIni").innerHTML=showPago?'<div class="cobro"><span class="ic">💵</span><b>Día de pago: sueldo de '+money(T.sueldo)+'</b><small>Confírmalo cuando te paguen.</small><span class="acts"><button data-pago="1">Confirmar pago</button><button data-nopago="1">Esta semana no</button></span></div>':"";
+  /* Esta semana + meta del mes */
+  const mk=monthKey(today()),mes=inMonth(mk).filter(isIn).reduce((t,m)=>t+m.a,0),mt=T.metaMes,falta=Math.max(0,mt-mes);
+  $("semBlock").innerHTML='<div class="block-h"><h2>Esta semana</h2></div>'
+    +'<div class="totline" style="border:0;padding-top:0"><span>Sueldo</span><b class="num">'+money(W.su)+'</b></div>'
+    +'<div class="totline" style="border:0;padding-top:0"><span>Apoyo camión</span><b class="num">'+money(W.ca)+'</b></div>'
+    +'<div class="totline" style="border:0;padding-top:0"><span>Propinas</span><b class="num">'+money(W.pr)+'</b></div>'
+    +'<div class="totline"><b>Total</b><b class="num">'+money(tot)+'</b></div>'
+    +'<p class="help" style="margin-top:8px">Días trabajados: '+W.dias+' de 6'+(W.hx>0?' · '+W.hx+' h extra':'')+'</p>'
+    +'<div class="block-h" style="margin:16px 0 0"><h2>Meta del mes</h2></div><div class="bar"><i style="width:'+barW(mt?mes/mt:0)+'"></i></div>'
+    +'<p class="sub num" style="margin:0">'+(mt?(falta?money(mes)+' de '+money(mt)+' · te faltan '+money(falta):money(mes)+' de '+money(mt)+' · ¡meta cumplida!'):money(mes)+' este mes')+'</p>';
+  /* Por cobrar */
+  const L=S.settings.porCobrar.filter(x=>!x.cobrada);
+  $("cobrarBlock").hidden=!L.length;$("cobrarAdd0").hidden=!!L.length;
+  $("cobrarBlock").innerHTML=L.length?'<div class="block-h"><h2>Por cobrar</h2><button class="link" id="cobrarAdd">+ Agregar</button></div><div class="cobros">'
+    +L.map(x=>'<div class="sug" data-id="'+esc(x.id)+'"><div class="acts"><input class="input" data-k="quien" maxlength="30" aria-label="Quién" value="'+esc(x.quien)+'"><input class="input" data-k="concepto" maxlength="40" aria-label="Concepto" placeholder="Concepto" value="'+esc(x.concepto)+'"></div>'
+      +'<div class="acts"><input class="input num" data-k="monto" type="number" inputmode="numeric" min="0" placeholder="Monto" aria-label="Monto" value="'+(x.monto||"")+'"><button class="ok" data-pagado="1">Ya me pagó</button></div></div>').join("")+'</div>':"";}
+$("pagoIni").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const T=S.settings.trabajo,ws=weekStart();
+  if(b.dataset.nopago){if(!T.omit.includes(ws))T.omit.push(ws);persist();renderAll();toast("Listo, esta semana no te lo recuerdo",()=>{T.omit=T.omit.filter(x=>x!==ws);persist();renderAll();});return;}
+  if(!b.dataset.pago)return;
+  const rec={id:uid(),t:"ingreso",c:"mesero-sueldo",a:T.sueldo,n:"Sueldo semanal",d:today(),at:Date.now()};S.movs.push(rec);persist();renderAll();
+  openRep([rec.id]);
+  toast("Sueldo anotado: "+money(rec.a),()=>{S.movs=S.movs.filter(x=>x.id!==rec.id);S.settings.repartos=S.settings.repartos.map(r=>({...r,movs:(r.movs||[]).filter(i=>i!==rec.id)})).filter(r=>r.movs.length);
+    if($("repSheet").classList.contains("open")){R=null;closePanel("repSheet");}persist();renderAll();toast("Listo, se quitó");});});
+function addCobrar(){const x={id:uid(),quien:"Nuevo",concepto:"",monto:null,cat:"otro-ingreso",creado:today(),cobrada:false,movId:null,cobradaEl:null};S.settings.porCobrar.push(x);persist();renderTrabajo();
+  const i=document.querySelector('#cobrarBlock [data-id="'+x.id+'"] [data-k=quien]');if(i){i.focus();i.select();}}
+$("cobrarAdd0").onclick=addCobrar;
+$("cobrarBlock").addEventListener("click",e=>{if(e.target.closest("#cobrarAdd"))return addCobrar();
+  const b=e.target.closest("[data-pagado]");if(!b)return;const row=b.closest(".sug"),x=S.settings.porCobrar.find(y=>y.id===row.dataset.id);if(!x)return;
+  const inp=row.querySelector("[data-k=monto]"),a=Math.round(+inp.value||0);
+  if(!(a>0)){inp.focus();return toast("Escribe cuánto te pagó");}
+  x.monto=a;const rec={id:uid(),t:"ingreso",c:x.cat,a,n:x.quien+(x.concepto?" · "+x.concepto:""),d:today(),at:Date.now()};
+  S.movs.push(rec);x.cobrada=true;x.movId=rec.id;x.cobradaEl=today();persist();renderAll();
+  toast("Anotado: "+money(a)+" de "+x.quien,()=>{S.movs=S.movs.filter(m=>m.id!==rec.id);x.cobrada=false;x.movId=null;x.cobradaEl=null;persist();renderAll();toast("Listo, se quitó");});});
+$("cobrarBlock").addEventListener("change",e=>{const k=e.target.dataset.k,row=e.target.closest(".sug");if(!k||!row)return;const x=S.settings.porCobrar.find(y=>y.id===row.dataset.id);if(!x)return;
+  if(k==="monto"){const v=Math.round(+e.target.value||0);x.monto=v>0?v:null;}
+  else if(k==="quien")x.quien=e.target.value.trim()||"Nuevo";
+  else x.concepto=e.target.value.trim();
+  persist();});
+
+/* Hoja del turno */
+function tuWarn(){const d=$("tuFecha").value;$("tuWarn").hidden=!(isDay(d)&&S.settings.turnos.some(t=>t.d===d));}
+function openTurno(){$("tuFecha").value=today();$("tuFecha").max=today();$("tuProp").value="";$("tuCam").value=S.settings.trabajo.camion||"";$("tuExtra").value="";tuWarn();
+  openPanel("turnoSheet");setTimeout(()=>{try{$("tuProp").focus({preventScroll:true});}catch(e){}},450);}
+$("turnoBtn").onclick=openTurno;$("tuFecha").addEventListener("change",tuWarn);
+$("tuLater").onclick=()=>closePanel("turnoSheet");
+$("tuGo").onclick=()=>{const d=isDay($("tuFecha").value)?$("tuFecha").value:today(),p=Math.max(0,Math.round(+$("tuProp").value||0)),c=Math.max(0,Math.round(+$("tuCam").value||0)),x=Math.max(0,+$("tuExtra").value||0);
+  const r=crearTurno(d,p,c,x);persist();closePanel("turnoSheet");renderAll();
+  toast("Turno guardado",()=>{quitarTurno(r);persist();renderAll();toast("Listo, se quitó");});};
+
+/* Ajustes: trabajo */
+const setT=(k,v,msg)=>{S.settings.trabajo[k]=v;persist();renderAll();toast(msg||"Guardado");};
+$("setSueldo").addEventListener("change",e=>setT("sueldo",Math.max(0,Math.round(+e.target.value||0)),"Sueldo guardado"));
+$("setCamion").addEventListener("change",e=>setT("camion",Math.max(0,Math.round(+e.target.value||0)),"Apoyo de camión guardado"));
+$("setDiaPago").addEventListener("change",e=>setT("diaPago",Math.min(6,Math.max(0,Math.round(+e.target.value))),"Día de pago guardado"));
+$("setMetaMes").addEventListener("change",e=>setT("metaMes",Math.max(0,Math.round(+e.target.value||0)),"Meta del mes guardada"));
 
 /* ---------- Aviso con deshacer ---------- */
 let tT,undoFn=null;
@@ -1219,7 +1349,7 @@ const standalone=matchMedia("(display-mode: standalone)").matches||navigator.sta
 if(!standalone&&/iPhone|iPad/.test(navigator.userAgent))$("installTip").hidden=false;
 try{if("serviceWorker" in navigator&&location.protocol==="https:"){navigator.serviceWorker.register("sw.js").catch(()=>{});}}catch(e){}
 
-function renderAll(){applyTheme(S.settings.theme);renderCobros();renderInicio();renderMovs();renderSobres();renderProx();renderRevisar();renderBiz();renderMas();paintSync();}
+function renderAll(){applyTheme(S.settings.theme);renderCobros();renderInicio();renderTrabajo();renderMovs();renderSobres();renderProx();renderRevisar();renderBiz();renderMas();paintSync();}
 persist();renderSobEd();renderMemEd();renderNube();renderAll();
 scheduleSync(800);
 })();
