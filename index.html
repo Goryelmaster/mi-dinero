@@ -225,6 +225,15 @@ h2{font:700 18px/1.2 var(--round);margin:0}
 .sw input::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform 220ms var(--ease-out)}
 .sw input:checked{background:var(--leaf)}
 .sw input:checked::after{transform:translateX(20px)}
+.cua{display:flex;flex-direction:column;gap:8px;background:var(--sheet);border-radius:18px;padding:14px 16px}
+.cua .t{font:700 15px var(--round)}.cua .t span{color:var(--ink-2);font-weight:600}
+.cua .ok{font-size:13px;color:var(--ink-2);margin:0}
+.cua .row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.cua .row b{font:700 17px var(--round)}.cua .row p{margin:0;font-size:13px;color:var(--ink-2)}
+.cua .row button{flex:none;background:var(--mango);color:#17352C;font:700 15px var(--round);padding:10px 16px;border-radius:14px}
+.cua .link{align-self:flex-start;font-size:13px}
+.cua-in{width:104px;text-align:right;padding:8px 10px}
+.mini-cua{display:block;width:100%;text-align:left;font-size:13px;color:var(--ink-2);padding:6px 0 0}
 .ghost{width:100%;padding:12px;border-radius:14px;border:1.5px dashed var(--rule);color:var(--ink-2);font-weight:600;font-size:14px;transition:transform 140ms var(--ease-out)}
 .ghost:active{transform:scale(.98)}
 .kill{align-self:flex-start;color:var(--coral);font-size:14px;font-weight:600;padding:4px 0}
@@ -441,6 +450,7 @@ h2{font:700 18px/1.2 var(--round);margin:0}
   <main class="view" id="v-sobres" hidden>
     <div><h1>Tus sobres</h1><p class="sub" id="sobSub"></p></div>
     <div id="sobPend"></div>
+    <div id="cuaCard"></div>
     <div id="cobrosSob" class="cobros"></div>
     <button class="ghost" id="revBuscar">🔄 Buscar recibos ahora</button>
     <section class="block" id="revBlock" hidden style="display:flex;flex-direction:column;gap:10px">
@@ -572,6 +582,17 @@ h2{font:700 18px/1.2 var(--round);margin:0}
   <ul class="rep-list" id="repList"></ul>
   <button class="save" id="repGo">Repartir</button>
   <button class="later" id="repLater">Ahora no</button>
+</section>
+
+<!-- Hoja para cuadrar sobres con el dinero real -->
+<section class="sheet" id="cuaSheet" role="dialog" aria-modal="true" aria-labelledby="cuaTitle" aria-hidden="true">
+  <div class="grab"></div>
+  <div class="rep-h"><small id="cuaTitle">Repartir</small><div class="v num" id="cuaAmt">$0</div><small id="cuaSub"></small></div>
+  <ul class="rep-list" id="cuaList"></ul>
+  <p class="help" id="cuaLeft" style="text-align:center;margin:10px 0"></p>
+  <button class="ghost" id="cuaRest" hidden>Poner el resto en Ahorro</button>
+  <button class="save" id="cuaGo">Repartir</button>
+  <button class="later" id="cuaLater">Ahora no</button>
 </section>
 
 <!-- Hoja para registrar turno -->
@@ -735,7 +756,7 @@ function normalize(d){
   if(!st.memDesde)st.memDesde=ymd(new Date());
   if(!Array.isArray(st.memOmit))st.memOmit=[];
   if(!st.sugDec||typeof st.sugDec!=="object")st.sugDec={};
-  st.traspasos=(Array.isArray(st.traspasos)?st.traspasos:[]).filter(x=>x&&x.id&&x.de&&x.a&&x.de!==x.a&&Math.round(+x.monto)>0&&isDay(x.d)).map(x=>({id:x.id,de:String(x.de),a:String(x.a),monto:Math.round(+x.monto),d:x.d,sem:isDay(x.sem)?x.sem:weekStart(x.d),at:+x.at||0}));
+  st.traspasos=(Array.isArray(st.traspasos)?st.traspasos:[]).filter(x=>x&&x.id&&x.de&&x.a&&x.de!==x.a&&x.de!=="diezmo"&&Math.round(+x.monto)>0&&isDay(x.d)).map(x=>({id:x.id,de:String(x.de),a:String(x.a),monto:Math.round(+x.monto),d:x.d,sem:isDay(x.sem)?x.sem:weekStart(x.d),at:+x.at||0}));
   const movs0=Array.isArray(d.movs)?d.movs:[];
   st.membresias=(Array.isArray(st.membresias)?st.membresias:[]).filter(m=>m&&m.id).map(m=>{
     const o={...m,nombre:String(m.nombre||"Suscripción"),monto:Math.max(0,+m.monto||0),dia:Math.min(31,Math.max(1,Math.round(+m.dia||1))),cat:m.cat||"suscripciones",activa:m.activa!==false,desde:m.desde||st.memDesde,
@@ -809,7 +830,11 @@ function memTarget(ws){const we=weekEnd(ws),prev=memFundedBefore(ws)-memSpent(S.
   return Math.max(memSemanal(),Math.round(due-prev));}
 const fmtDay=d=>new Date(d+"T12:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"});
 function sobTarget(x,ws){return x.tipo==="porcentaje"?Math.round(diezmoBase(ws).neto*(+x.monto||0)/100):x.tipo==="membresias"?memTarget(ws):(+x.monto||0);}
-function sobFunded(id,ws){return S.settings.repartos.filter(r=>r.sem===ws).reduce((t,r)=>t+(((r.partes||[]).find(p=>p.id===id)||{}).a||0),0)+trasNet(id,x=>x.sem===ws);}
+/* Registros de cuadre/reinicio: para la meta semanal cuenta lo recién asignado (nuevo), nunca lo quitado */
+function esCuadre(r){return r.tipo==="cuadre"||r.tipo==="reinicio";}
+function esSuelto(r){return r.tipo==="traspaso"||esCuadre(r);}
+function parteFund(r,id){const p=(r.partes||[]).find(q=>q.id===id);if(!p)return 0;if(esCuadre(r))return p.nuevo!=null?Math.max(0,+p.nuevo||0):Math.max(0,+p.a||0);return p.a||0;}
+function sobFunded(id,ws){return S.settings.repartos.filter(r=>r.sem===ws).reduce((t,r)=>t+parteFund(r,id),0)+trasNet(id,x=>x.sem===ws);}
 function sobSpent(x,ws){return inWeek(ws).filter(m=>m.t==="gasto"&&x.cats.includes(m.c)).reduce((t,m)=>t+m.a,0);}
 function sobInfo(x,ws){ws=ws||weekStart();const meta=sobTarget(x,ws),spent=sobSpent(x,ws),fund=sobFunded(x.id,ws),save=KEEP_SOB.includes(x.id);
   const pct=meta?spent/meta:(spent?2:0);
@@ -846,7 +871,7 @@ function autoSync(){let ch=false;const ok=new Set(S.movs.filter(elegible).map(m=
 /* Migración única: quita los repartos viejos del trabajo y deja que el reparto automático los rehaga */
 function migrarReglas(){const sd=S.settings.seeds;if(sd.reglasV1)return false;sd.reglasV1=true;
   const byId=new Map(S.movs.map(m=>[m.id,m]));
-  S.settings.repartos=S.settings.repartos.filter(r=>{if(r.regla||r.tipo==="traspaso")return true;const ms=(r.movs||[]).map(i=>byId.get(i));return !(ms.length&&ms.every(m=>m&&elegible(m)));});
+  S.settings.repartos=S.settings.repartos.filter(r=>{if(r.regla||esSuelto(r))return true;const ms=(r.movs||[]).map(i=>byId.get(i));return !(ms.length&&ms.every(m=>m&&elegible(m)));});
   autoSync();return true;}
 function addTraspaso(from,to,x){const rec={id:uid(),tipo:"traspaso",movs:[],d:today(),sem:weekStart(),monto:x,partes:[{id:from,a:-x,falta:0},{id:to,a:x,falta:0}],at:Date.now()};S.settings.repartos.push(rec);return rec;}
 /* Saldo de un sobre = lo que le han repartido − lo que has gastado de sus categorías (desde que empezó el reparto automático) */
@@ -854,7 +879,7 @@ function sobSaldo(id){if(id==="membresias")return memSaldo();if(id==="ahorro")re
   const x=sobById(id),D=S.settings.reglas.desde,inn=S.settings.repartos.filter(r=>r.d>=D).reduce((t,r)=>t+(((r.partes||[]).find(p=>p.id===id)||{}).a||0),0)+trasNet(id,y=>y.d>=D);
   const out=x?S.movs.filter(m=>m.t==="gasto"&&x.cats.includes(m.c)&&m.d>=D).reduce((t,m)=>t+m.a,0):0;return r2(inn-out);}
 function sobSemana(id,ws){const x=sobById(id),we=weekEnd(ws);
-  const entro=S.settings.repartos.filter(r=>r.sem===ws).reduce((t,r)=>{const a=((r.partes||[]).find(p=>p.id===id)||{}).a||0;return t+(a>0?a:0);},0)+trasNet(id,y=>y.sem===ws&&y.a===id);
+  const entro=S.settings.repartos.filter(r=>r.sem===ws).reduce((t,r)=>{const a=esCuadre(r)?parteFund(r,id):((r.partes||[]).find(p=>p.id===id)||{}).a||0;return t+(a>0?a:0);},0)+trasNet(id,y=>y.sem===ws&&y.a===id);
   const gasto=x?S.movs.filter(m=>m.t==="gasto"&&x.cats.includes(m.c)&&m.d>=ws&&m.d<=we).reduce((t,m)=>t+m.a,0):0;return{entro:r2(entro),gasto:r2(gasto)};}
 function repartidoIds(){const ids=new Set();S.settings.repartos.forEach(r=>(r.movs||[]).forEach(i=>ids.add(i)));return ids;}
 function pendientes(){const ws=weekStart(),ids=repartidoIds();return inWeek(ws).filter(m=>m.t==="ingreso"&&!m.primicia&&!ids.has(m.id));}
@@ -868,11 +893,12 @@ function planReparto(monto,ws){let left=monto;
   return{partes,sobra};}
 
 function barW(v){return Math.max(0,Math.min(100,v*100)).toFixed(1)+"%";}
-function renderMini(){const list=S.settings.sobres.map(x=>({x,s:sobSaldo(x.id)}));
-  if(list.every(I=>Math.round(I.s)===0)){$("sobMini").innerHTML='<p class="sub" style="margin:0">Aún no hay dinero en tus sobres. Registra un turno y se reparte solo.</p>';return;}
+function renderMini(){const list=S.settings.sobres.map(x=>({x,s:sobSaldo(x.id)})),sr=sinRepartir(),
+    cu=sr>0?'<button class="mini-cua cua-go" data-go="sobres">Sin repartir: '+money(sr)+' · <b>Repartir</b></button>':sr<0?'<button class="mini-cua cua-go" data-go="sobres">Faltan '+money(-sr)+' · <b>Cuadrar</b></button>':"";
+  if(list.every(I=>Math.round(I.s)===0)){$("sobMini").innerHTML='<p class="sub" style="margin:0">Aún no hay dinero en tus sobres. Registra un turno y se reparte solo.</p>'+cu;return;}
   $("sobMini").innerHTML=list.filter(I=>I.x.id==="diezmo"||Math.round(I.s)!==0).map(I=>
     '<button class="mini-row" data-go="sobres"><span class="em">'+sobEm(I.x)+'</span><span class="nm">'+esc(I.x.nombre)+'</span><b class="num">'+money(I.s)+'</b>'
-    +(I.x.id==="red"&&I.s>0?'<small style="grid-column:2/4;color:var(--ink-3);font-size:12px">Úsala solo si las propinas no alcanzan</small>':'')+'</button>').join("");}
+    +(I.x.id==="red"&&I.s>0?'<small style="grid-column:2/4;color:var(--ink-3);font-size:12px">Úsala solo si las propinas no alcanzan</small>':'')+'</button>').join("")+cu;}
 function renderHoy(){const t=today(),P=S.settings.reglas.primicia;
   $("primBanner").innerHTML=primActiva(t)?'<div class="prim"><b>Semana de primicia 🙏</b><small>Del '+new Date(P.desde+"T12:00").getDate()+' al '+new Date(P.hasta+"T12:00").getDate()+' de '+new Date(P.hasta+"T12:00").toLocaleDateString("es-MX",{month:"long"})+'</small></div>':"";
   $("gastarHoy").innerHTML='<small>Puedes gastar hoy</small><div class="big num">'+money(Math.max(0,sobSaldo("gastosDia")+sobSaldo("comida")))+'</div><p class="sub">Gastos del día + comida, lo que no has gastado</p>';
@@ -881,14 +907,71 @@ function renderHoy(){const t=today(),P=S.settings.reglas.primicia;
 $("colchonCard").addEventListener("click",e=>{const b=e.target.closest("[data-col]");if(!b)return;const x=r2(sobSaldo("colchon")),to=b.dataset.col;if(x<.5||!sobById(to))return;
   const rec=addTraspaso("colchon",to,x);persist();renderAll();
   toast("Pasaron "+money(x)+" a "+sobById(to).nombre,()=>{S.settings.repartos=S.settings.repartos.filter(r=>r.id!==rec.id);persist();renderAll();toast("Listo, se quitó");});});
-$("sobMini").addEventListener("click",e=>{if(e.target.closest(".mini-row"))go("sobres");});
+$("sobMini").addEventListener("click",e=>{if(e.target.closest(".mini-row,.cua-go"))go("sobres");});
 $("sobSee").onclick=()=>go("sobres");
+
+/* ---------- Cuadre: dinero real vs sobres ---------- */
+const sobTotal=()=>Math.round(S.settings.sobres.reduce((t,x)=>t+sobSaldo(x.id),0));
+const pendTotal=()=>pendientes().reduce((t,m)=>t+m.a,0);
+function sinRepartir(){const v=Math.round(haveNow()-sobTotal()-pendTotal());return Math.abs(v)<1?0:v;}
+/* Reparte `monto` sin diezmo. base "cero": todos parten de $0; "actual": se llena lo que falta. Lo que sobra va a Ahorro. */
+function planCuadre(monto,base){let left=Math.max(0,Math.round(monto));const ws=weekStart(),by={};
+  S.settings.sobres.forEach(x=>{if(x.id==="diezmo")return;const cur=base==="cero"?0:Math.max(0,Math.round(sobSaldo(x.id))),need=Math.max(0,Math.round(sobTarget(x,ws))-cur),a=Math.min(need,left);by[x.id]=a;left-=a;});
+  const dest=by.ahorro!==undefined?"ahorro":Object.keys(by)[0];if(dest&&left>0){by[dest]+=left;left=0;}
+  return{by,left};}
+function renderCua(){const el=$("cuaCard");if(!el)return;const have=haveNow(),sr=sinRepartir();let h;
+  const head='<div class="t">Tu dinero real <span>· Tienes '+money(have)+' · En sobres '+money(sobTotal())+'</span></div>';
+  if(sr>0)h='<div class="row"><div><b class="num">Sin repartir: '+money(sr)+'</b></div><button data-cua="rep">Repartir</button></div>';
+  else if(sr<0)h='<div class="row"><div><b class="num">Faltan '+money(-sr)+'</b><p>Tus sobres tienen más que tu dinero real</p></div><button data-cua="quita">Quitar de un sobre</button></div>';
+  else h='<p class="ok">✓ Tus sobres cuadran con tu dinero</p>';
+  el.innerHTML='<div class="cua">'+head+h+'<button class="link" data-cua="reset">Empezar de cero con mi dinero real</button></div>';}
+let CU=null;
+const cuaN=v=>Math.max(0,Math.round(+String(v).replace(/[^0-9.]/g,"")||0));
+function cuaLeft(){return CU.total-CU.ids.reduce((t,id)=>t+(CU.vals[id]||0),0);}
+function cuaPaint(){const left=cuaLeft(),q=CU.mode==="quita";let ok=left===0;
+  if(q&&CU.ids.some(id=>(CU.vals[id]||0)>CU.max[id]))ok=false;
+  $("cuaLeft").textContent=q?(left>0?"Te falta quitar "+money(left):left<0?"Quitas "+money(-left)+" de más":"Listo"):(left>0?"Te quedan "+money(left)+" por asignar":left<0?"Te pasaste "+money(-left):"Todo asignado");
+  $("cuaLeft").style.color=ok?"":"var(--coral)";$("cuaRest").hidden=q||left===0;$("cuaRest").textContent=left<0?"Quitar lo que sobra de Ahorro":"Poner el resto en Ahorro";$("cuaGo").disabled=!ok||CU.total<=0&&CU.mode!=="reset";
+  $("cuaGo").textContent=CU.mode==="reset"?"Empezar de cero":q?"Quitar "+money(CU.total):"Repartir "+money(CU.total);}
+function openCua(mode){let total,plan={};
+  const ids=S.settings.sobres.map(x=>x.id);
+  if(mode==="rep"){total=sinRepartir();if(total<=0)return;plan=planCuadre(total,"actual").by;}
+  else if(mode==="quita"){const need=-sinRepartir();if(need<=0)return;total=need;let r=need;
+    const L=S.settings.sobres.filter(x=>x.id!=="diezmo"&&disp(x.id)>=1),order=[...L.filter(x=>x.id==="ahorro"),...L.filter(x=>x.id!=="ahorro").reverse()];
+    order.forEach(x=>{const a=Math.min(disp(x.id),r);plan[x.id]=a;r-=a;});}
+  else{total=Math.max(0,Math.round(haveNow()-Math.max(0,sobSaldo("diezmo"))-pendTotal()));plan=planCuadre(total,"cero").by;}
+  CU={mode,total,vals:{},max:{},ids:[]};
+  S.settings.sobres.forEach(x=>{if(mode==="quita"){if(x.id==="diezmo"||disp(x.id)<1)return;CU.max[x.id]=disp(x.id);}
+    else if((x.id==="colchon"||x.id==="red")&&!plan[x.id])return;CU.ids.push(x.id);CU.vals[x.id]=plan[x.id]||0;});
+  $("cuaTitle").textContent=mode==="rep"?"Repartir lo que no está en sobres":mode==="quita"?"Quitar de un sobre":"Empezar de cero";
+  $("cuaAmt").textContent=money(total);
+  $("cuaSub").textContent=mode==="rep"?"Es dinero que tienes y no está en ningún sobre. Puedes cambiar cuánto va a cada uno.":mode==="quita"?"Tus sobres suman más que tu dinero real. Elige de cuál sale.":"Todos los sobres (menos el diezmo) quedan en $0 y se reparten tus "+money(total)+" otra vez. El diezmo no se toca, pero puedes sumarle.";
+  $("cuaList").innerHTML=CU.ids.map(id=>{const x=sobById(id);
+    const note=mode==="quita"?"En el sobre hay "+money(CU.max[id]):mode==="reset"?(id==="diezmo"?"Hoy tiene "+money(sobSaldo(id))+" (no se toca)":"Hoy tiene "+money(sobSaldo(id))):(id==="diezmo"?"Opcional: lo que quieras sumar":"");
+    return '<li><span class="em">'+sobEm(x)+'</span><span>'+esc(x.nombre)+'</span><input class="input num cua-in" data-cid="'+esc(id)+'" type="text" inputmode="numeric" value="'+CU.vals[id]+'" aria-label="Monto para '+esc(x.nombre)+'">'+(note?'<small>'+esc(note)+'</small>':'')+'</li>';}).join("");
+  armed=null;cuaPaint();openPanel("cuaSheet");}
+$("cuaCard").addEventListener("click",e=>{const b=e.target.closest("[data-cua]");if(b)openCua(b.dataset.cua);});
+$("cuaList").addEventListener("input",e=>{const i=e.target.closest("[data-cid]");if(!i||!CU)return;CU.vals[i.dataset.cid]=cuaN(i.value);cuaPaint();});
+$("cuaRest").onclick=()=>{if(!CU)return;const left=cuaLeft();if(!left)return;const id=CU.ids.includes("ahorro")?"ahorro":CU.ids.find(i=>i!=="diezmo");if(!id)return;
+  CU.vals[id]=Math.max(0,(CU.vals[id]||0)+left);const inp=document.querySelector('#cuaList [data-cid="'+id+'"]');if(inp)inp.value=CU.vals[id];cuaPaint();};
+$("cuaLater").onclick=()=>{closePanel("cuaSheet");CU=null;};
+$("cuaGo").onclick=()=>{if(!CU||$("cuaGo").disabled)return;const mode=CU.mode;
+  if(mode==="reset"&&!confirmTwice($("cuaGo"),"Toca otra vez para empezar de cero"))return;
+  const D=S.settings.reglas.desde,d=today()>=D?today():D;let partes=[];
+  if(mode==="rep")partes=CU.ids.filter(id=>CU.vals[id]>0).map(id=>({id,a:CU.vals[id],nuevo:CU.vals[id]}));
+  else if(mode==="quita")partes=CU.ids.filter(id=>id!=="diezmo"&&CU.vals[id]>0).map(id=>({id,a:-CU.vals[id]}));
+  else{S.settings.sobres.forEach(x=>{if(x.id==="diezmo"){const v=CU.vals.diezmo||0;if(v>0)partes.push({id:"diezmo",a:v,nuevo:v});return;}
+      const nv=CU.vals[x.id]||0;partes.push({id:x.id,a:r2(nv-sobSaldo(x.id)),nuevo:nv});});}
+  const rec={id:uid(),movs:[],d,sem:weekStart(),monto:CU.total,partes,at:Date.now(),tipo:mode==="reset"?"reinicio":"cuadre"};
+  S.settings.repartos.push(rec);persist();closePanel("cuaSheet");CU=null;renderAll();
+  toast(mode==="reset"?"Listo: empezaste de cero con "+money(rec.monto):mode==="quita"?"Quitaste "+money(rec.monto)+" de tus sobres":"Repartiste "+money(rec.monto),()=>{S.settings.repartos=S.settings.repartos.filter(r=>r.id!==rec.id);persist();renderAll();toast("Listo, se quitó");});};
 
 function renderSobres(){const ws=weekStart(),we=weekEnd(ws),dl=daysLeftWeek();
   const a=new Date(ws+"T12:00"),b=new Date(we+"T12:00"),mo=d=>d.toLocaleDateString("es-MX",{month:"long"});
   $("sobSub").textContent="Semana del "+a.getDate()+(mo(a)!==mo(b)?" de "+mo(a):"")+" al "+b.getDate()+" de "+mo(b)+". "+(dl===1?"Hoy es el último día.":"Quedan "+dl+" días.");
   const pend=pendientes(),pt=pend.reduce((t,m)=>t+m.a,0);
   $("sobPend").innerHTML=pend.length?'<div class="pend"><div><b class="num">Tienes '+money(pt)+' sin repartir</b><p>'+esc(pend.map(m=>(ALL[m.c]||{n:m.c}).n).join(", "))+'</p></div><button id="pendGo">Repartir</button></div>':"";
+  renderCua();
   const hint=id=>{const R=S.settings.reglas,n=[["propina","propinas"],["sueldo","sueldo"],["abuelo","abuelo"],["camion","apoyo de camión"]].filter(([g])=>R[g][id]>0).map(e=>e[1]);
     return n.length?"De "+(n.length>1?n.slice(0,-1).join(", ")+" y "+n[n.length-1]:n[0]):"";};
   $("sobList").innerHTML=S.settings.sobres.map(x=>{const sal=sobSaldo(x.id),W=sobSemana(x.id,ws);let desc,line;
@@ -919,8 +1002,9 @@ $("sobPend").addEventListener("click",e=>{if(e.target.closest("#pendGo"))openRep
 
 /* ---------- Pasar dinero entre sobres (nunca el diezmo) ---------- */
 const sobTr=()=>S.settings.sobres.filter(x=>x.id!=="diezmo");
+const sobDest=()=>S.settings.sobres;
 const disp=id=>Math.floor(r2(sobSaldo(id)));
-function paintTrasA(reset){const de=$("trasDe").value,cur=$("trasA").value,L=sobTr().filter(x=>x.id!==de);
+function paintTrasA(reset){const de=$("trasDe").value,cur=$("trasA").value,L=sobDest().filter(x=>x.id!==de);
   const neg=L.filter(x=>sobSaldo(x.id)<0).sort((a,b)=>sobSaldo(a.id)-sobSaldo(b.id))[0];
   $("trasA").innerHTML=L.map(x=>{const v=sobSaldo(x.id);return '<option value="'+esc(x.id)+'">'+(v<0?"⚠ ":"")+sobEm(x)+" "+esc(x.nombre)+" · "+money(v)+'</option>';}).join("");
   $("trasA").value=!reset&&L.some(x=>x.id===cur)?cur:(neg?neg.id:(L[0]||{}).id);}
@@ -943,7 +1027,7 @@ $("trasFalta").onclick=()=>{const sa=sobSaldo($("trasA").value);$("trasMonto").v
 $("trasTodo").onclick=()=>{$("trasMonto").value=disp($("trasDe").value);paintTras();};
 $("trasLater").onclick=()=>closePanel("trasSheet");
 $("trasGo").onclick=()=>{const de=$("trasDe").value,a=$("trasA").value,m=Math.round(+$("trasMonto").value||0),xd=sobById(de),xa=sobById(a);
-  if(!(xd&&xa&&de!==a&&de!=="diezmo"&&a!=="diezmo"&&m>0&&m<=disp(de)))return paintTras();
+  if(!(xd&&xa&&de!==a&&de!=="diezmo"&&m>0&&m<=disp(de)))return paintTras();
   const rec={id:uid(),de,a,monto:m,d:today(),sem:weekStart(),at:Date.now()};S.settings.traspasos.push(rec);persist();closePanel("trasSheet");renderAll();
   toast("Pasaste "+money(m)+" de "+xd.nombre+" a "+xa.nombre,()=>{S.settings.traspasos=S.settings.traspasos.filter(x=>x.id!==rec.id);persist();renderAll();toast("Listo, se quitó");});};
 $("trasList").addEventListener("click",e=>{const b=e.target.closest("[data-tdel]");if(!b)return;const rec=S.settings.traspasos.find(x=>x.id===b.dataset.tdel);if(!rec)return;
@@ -1429,7 +1513,7 @@ function openPanel(id){if(!document.querySelector(".sheet.open"))lastFocus=docum
   $(id).classList.add("open");$("scrim").classList.add("open");$(id).setAttribute("aria-hidden","false");document.body.style.overflow="hidden";}
 function closePanel(id){$(id).classList.remove("open");$(id).setAttribute("aria-hidden","true");
   if(!document.querySelector(".sheet.open")){$("scrim").classList.remove("open");document.body.style.overflow="";if(lastFocus&&lastFocus.focus)lastFocus.focus({preventScroll:true});}}
-function closeAll(){if($("trasSheet").classList.contains("open"))closePanel("trasSheet");if($("turnoSheet").classList.contains("open"))closePanel("turnoSheet");if($("repSheet").classList.contains("open")){R=null;closePanel("repSheet");}if($("sheet").classList.contains("open"))closeSheet();}
+function closeAll(){if($("trasSheet").classList.contains("open"))closePanel("trasSheet");if($("turnoSheet").classList.contains("open"))closePanel("turnoSheet");if($("repSheet").classList.contains("open")){R=null;closePanel("repSheet");}if($("cuaSheet").classList.contains("open")){CU=null;closePanel("cuaSheet");}if($("sheet").classList.contains("open"))closeSheet();}
 function openAdjust(){F={t:"ajuste",c:"ajuste",a:"",id:null,auto:false};adjMode(true);$("delMv").hidden=true;$("saveOnly").hidden=true;paintAmt(false);openPanel("sheet");}
 $("adjBtn").onclick=openAdjust;
 function openSheet(m){adjMode(false);
@@ -1442,7 +1526,7 @@ $("scrim").onclick=closeAll;
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeAll();});
 
 // Deslizar hacia abajo para cerrar
-["sheet","repSheet","turnoSheet","trasSheet"].forEach(id=>{const sh=$(id);let y0=null,t0=0,dy=0;
+["sheet","repSheet","turnoSheet","trasSheet","cuaSheet"].forEach(id=>{const sh=$(id);let y0=null,t0=0,dy=0;
   sh.addEventListener("touchstart",e=>{if(sh.scrollTop>0||e.target.closest(".pad,.picks,input,select"))return;y0=e.touches[0].clientY;t0=Date.now();dy=0;sh.style.transition="none";},{passive:true});
   sh.addEventListener("touchmove",e=>{if(y0===null)return;dy=Math.max(0,e.touches[0].clientY-y0);sh.style.transform="translateY("+dy+"px)";},{passive:true});
   sh.addEventListener("touchend",()=>{if(y0===null)return;sh.style.transition="";sh.style.transform="";
@@ -1476,7 +1560,7 @@ $("delMv").onclick=()=>{if(!confirmTwice($("delMv"),"Toca otra vez para borrar")
   const old=S.movs.find(x=>x.id===F.id),oldReps=JSON.parse(JSON.stringify(S.settings.repartos)),oldTur=JSON.parse(JSON.stringify(S.settings.turnos));
   const gone=S.movs.filter(x=>x.id===F.id||(old.primicia&&x.ref===old.id));S.movs=S.movs.filter(x=>!gone.includes(x));
   S.settings.turnos=S.settings.turnos.filter(t=>{if(!t.movs.includes(old.id))return true;t.movs=t.movs.filter(i=>i!==old.id);return t.movs.length>0;});
-  S.settings.repartos=S.settings.repartos.map(r=>({...r,movs:(r.movs||[]).filter(i=>i!==old.id)})).filter(r=>r.movs.length||r.tipo==="traspaso");
+  S.settings.repartos=S.settings.repartos.map(r=>({...r,movs:(r.movs||[]).filter(i=>i!==old.id)})).filter(r=>r.movs.length||esSuelto(r));
   persist();closeSheet();renderAll();
   toast("Movimiento borrado",()=>{S.movs.push(...gone);S.settings.repartos=oldReps;S.settings.turnos=oldTur;persist();renderAll();});};
 
