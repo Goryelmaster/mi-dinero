@@ -739,7 +739,7 @@ function normalize(d){
   const movs0=Array.isArray(d.movs)?d.movs:[];
   st.membresias=(Array.isArray(st.membresias)?st.membresias:[]).filter(m=>m&&m.id).map(m=>{
     const o={...m,nombre:String(m.nombre||"Suscripción"),monto:Math.max(0,+m.monto||0),dia:Math.min(31,Math.max(1,Math.round(+m.dia||1))),cat:m.cat||"suscripciones",activa:m.activa!==false,desde:m.desde||st.memDesde,
-      frec:FRECS.includes(m.frec)?m.frec:"mensual",cada:Math.min(60,Math.max(1,Math.round(+m.cada||2))),prueba:!!m.prueba,finPrueba:isDay(m.finPrueba)?m.finPrueba:""};
+      frec:FRECS.includes(m.frec)?m.frec:"mensual",cada:Math.min(60,Math.max(1,Math.round(+m.cada||2))),prueba:!!m.prueba,finPrueba:isDay(m.finPrueba)?m.finPrueba:"",promoMonto:Math.max(0,Math.round(+m.promoMonto||0)),promoCobros:Math.max(0,Math.round(+m.promoCobros||0))};
     if(!isDay(o.prox))o.prox=legacyProx(o,movs0,st.memOmit);
     return o;});
   if(!Array.isArray(st.repartos))st.repartos=[];
@@ -785,16 +785,19 @@ function diezmoBase(ws){const ms=inWeek(ws),nc=negocioCats(),sum=f=>ms.filter(f)
 /* ---- Membresías ---- */
 const memActivas=()=>S.settings.membresias.filter(m=>m.activa);
 /* Lo que cuesta al mes: semanal ×52÷12, anual ÷12, cada X meses ÷X. Las pruebas gratis no cuentan hasta que cobran. */
-function porMes(m){return m.frec==="semanal"?m.monto*52/12:m.frec==="anual"?m.monto/12:m.frec==="meses"?m.monto/m.cada:m.monto;}
+const promoOn=m=>m.promoCobros>0&&m.promoMonto>0;
+const precioMem=m=>promoOn(m)?m.promoMonto:m.monto;
+function porMes(m){const p=precioMem(m);return m.frec==="semanal"?p*52/12:m.frec==="anual"?p/12:m.frec==="meses"?p/m.cada:p;}
+function promoHint(){const L=memActivas().filter(m=>!m.prueba&&promoOn(m)&&m.monto!==m.promoMonto);return L.length?" (sube a "+money(Math.round(L.reduce((t,m)=>t+(m.frec==="semanal"?m.monto*52/12:m.frec==="anual"?m.monto/12:m.frec==="meses"?m.monto/m.cada:m.monto)-porMes(m),0)+memMensual()))+" al mes cuando acabe la promo)":"";}
 const memMensual=()=>Math.round(memActivas().filter(m=>!m.prueba).reduce((t,m)=>t+porMes(m),0));
 const memSemanal=()=>Math.ceil(memMensual()*12/52);
 const esGrande=m=>m.frec==="anual"||(m.frec==="meses"&&m.cada>=3);
 const daysTo=ds=>Math.round((new Date(ds+"T12:00")-new Date(today()+"T12:00"))/864e5);
 const frecTx=m=>m.frec==="meses"?"cada "+m.cada+" meses":m.frec;
 /* Cobros que ya tocaron y no están anotados */
-function memPendientes(){const t=today();return memActivas().filter(m=>m.monto>0&&m.prox<=t).map(m=>({m,due:m.prox}));}
+function memPendientes(){const t=today();return memActivas().filter(m=>precioMem(m)>0&&m.prox<=t).map(m=>({m,due:m.prox}));}
 function memProximos(dias){const t=today(),L=addDays(t,dias);
-  return memActivas().filter(m=>m.monto>0&&m.prox>t&&m.prox<=L).map(m=>({m,due:m.prox})).sort((a,b)=>a.due.localeCompare(b.due));}
+  return memActivas().filter(m=>precioMem(m)>0&&m.prox>t&&m.prox<=L).map(m=>({m,due:m.prox})).sort((a,b)=>a.due.localeCompare(b.due));}
 /* Traspasos entre sobres (S.settings.traspasos): neto de un sobre = lo que le pasaron − lo que pasó a otros. fn filtra cuáles cuentan. */
 function trasNet(id,fn){return S.settings.traspasos.filter(x=>!fn||fn(x)).reduce((t,x)=>t+(x.a===id?x.monto:0)-(x.de===id?x.monto:0),0);}
 function memFundedBefore(ws){return S.settings.repartos.filter(r=>r.sem<ws).reduce((t,r)=>t+(((r.partes||[]).find(p=>p.id==="membresias")||{}).a||0),0)+trasNet("membresias",x=>x.sem<ws);}
@@ -802,7 +805,7 @@ function memSpent(from,to){const x=sobById("membresias");if(!x)return 0;return S
 function memSaldo(){const all=S.settings.repartos.reduce((t,r)=>t+(((r.partes||[]).find(p=>p.id==="membresias")||{}).a||0),0);return all+trasNet("membresias")-memSpent(S.settings.memDesde,"9999");}
 /* Meta de la semana: la parte semanal, o más si un cobro de esta semana no alcanza con lo apartado */
 function memTarget(ws){const we=weekEnd(ws),prev=memFundedBefore(ws)-memSpent(S.settings.memDesde,ymd(new Date(new Date(ws+"T12:00").getTime()-864e5)));
-  const due=memActivas().filter(m=>m.monto>0).reduce((t,m)=>{let d=m.prox,n=0;while(d<=we&&n++<60){if(d>=ws)t+=m.monto;d=nextDate(m,d);}return t;},0);
+  const due=memActivas().filter(m=>precioMem(m)>0).reduce((t,m)=>{let d=m.prox,n=0;while(d<=we&&n++<60){if(d>=ws)t+=precioMem(m);d=nextDate(m,d);}return t;},0);
   return Math.max(memSemanal(),Math.round(due-prev));}
 const fmtDay=d=>new Date(d+"T12:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"});
 function sobTarget(x,ws){return x.tipo==="porcentaje"?Math.round(diezmoBase(ws).neto*(+x.monto||0)/100):x.tipo==="membresias"?memTarget(ws):(+x.monto||0);}
@@ -896,7 +899,7 @@ function renderSobres(){const ws=weekStart(),we=weekEnd(ws),dl=daysLeftWeek();
     else desc=hint(x.id)||(x.cats.length?catNames(x):"Sin categorías");
     if(x.tipo==="membresias"){const nx=memProximos(31)[0];
       line=(sal>=0?"En el sobre hay "+money(sal)+".":"Pagaste "+money(-sal)+" más de lo apartado.");
-      if(nx){line+=" Próximo cobro: "+nx.m.nombre+" el "+fmtDay(nx.due)+" ("+money(nx.m.monto)+").";if(sal<nx.m.monto)line+=" Te faltan "+money(nx.m.monto-Math.max(0,sal))+".";}
+      if(nx){line+=" Próximo cobro: "+nx.m.nombre+" el "+fmtDay(nx.due)+" ("+money(precioMem(nx.m))+").";if(sal<precioMem(nx.m))line+=" Te faltan "+money(precioMem(nx.m)-Math.max(0,sal))+".";}
       else if(!memActivas().length)line="Anota tus membresías en Ajustes y aquí se aparta lo de cada semana.";}
     else line="Esta semana entró "+money(W.entro)+" y gastaste "+money(W.gasto)+".";
     if(x.id==="red")line+=" Úsala solo si las propinas no alcanzan.";
@@ -1020,15 +1023,18 @@ const memEm=m=>(ALL[m.cat]||{em:"🔁"}).em;
 const FREC_LBL=[["semanal","Semanal"],["mensual","Mensual"],["anual","Anual"],["meses","Cada X meses"]];
 function memSum(m){if(!m.activa)return"Cancelada";
   if(m.prueba)return"Prueba gratis"+(m.finPrueba?", cancela antes del "+fmtDay(m.finPrueba):"")+(m.monto?" · luego "+money(m.monto):"");
+  if(promoOn(m))return"Promoción: "+money(m.promoMonto)+" · "+m.promoCobros+(m.promoCobros===1?" cobro más":" cobros más")+", luego "+money(m.monto)+" · próximo "+fmtDay(m.prox);
   return(m.monto?money(m.monto)+" "+frecTx(m):"Gratis")+" · próximo "+fmtDay(m.prox);}
-function memTotTx(){const mm=memMensual();return mm?"Pagas "+money(mm)+" al mes (las anuales ÷ 12). Se apartan "+money(memSemanal())+" cada semana.":"";}
+function memTotTx(){const mm=memMensual();return mm?"Pagas "+money(mm)+" al mes (las anuales ÷ 12). Se apartan "+money(memSemanal())+" cada semana."+promoHint():"";}
 function renderMemEd(){const open=new Set([...document.querySelectorAll("#memEd details[open]")].map(d=>d.dataset.id)),L=S.settings.membresias;
   $("memEd").hidden=!L.length;
   $("memEd").innerHTML=L.map(m=>'<details data-id="'+esc(m.id)+'"'+(open.has(m.id)?" open":"")+'><summary><span>'+memEm(m)+' '+esc(m.nombre)+'<small class="num">'+esc(memSum(m))+'</small></span><span class="go" aria-hidden="true">›</span></summary><div class="sob-body">'
     +'<label class="field"><span>Nombre</span><input class="input" data-k="nombre" maxlength="30" value="'+esc(m.nombre)+'"></label>'
     +'<div class="field"><span>Cada cuánto cobra</span><div class="cat-chips">'+FREC_LBL.map(([k,n])=>'<button data-frec="'+k+'" aria-pressed="'+(m.frec===k)+'">'+n+'</button>').join("")+'</div></div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label class="field"><span>Cuánto cobra (pesos)</span><input class="input num" data-k="monto" type="number" inputmode="numeric" min="0" value="'+m.monto+'"></label>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label class="field"><span>'+(m.promoCobros>0?"Cuánto cobra (precio normal)":"Cuánto cobra (pesos)")+'</span><input class="input num" data-k="monto" type="number" inputmode="numeric" min="0" value="'+m.monto+'"></label>'
     +(m.frec==="meses"?'<label class="field"><span>Cada cuántos meses</span><input class="input num" data-k="cada" type="number" inputmode="numeric" min="1" max="60" value="'+m.cada+'"></label>':'<span></span>')+'</div>'
+    +'<label class="chk"><input type="checkbox" data-k="promo"'+(m.promoCobros>0?" checked":"")+'> Tiene precio de promoción</label>'
+    +(m.promoCobros>0?'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label class="field"><span>Precio de promoción (pesos)</span><input class="input num" data-k="promoMonto" type="number" inputmode="numeric" min="0" value="'+m.promoMonto+'"></label><label class="field"><span>¿Cuántos cobros con ese precio?</span><input class="input num" data-k="promoCobros" type="number" inputmode="numeric" min="0" value="'+m.promoCobros+'"></label></div>':'')
     +'<label class="field"><span>Fecha del próximo cobro</span><input class="input num" data-k="prox" type="date" value="'+m.prox+'"></label>'
     +'<label class="chk"><input type="checkbox" data-k="prueba"'+(m.prueba?" checked":"")+'> Es prueba gratis</label>'
     +(m.prueba?'<label class="field"><span>Cancelar la prueba antes del</span><input class="input num" data-k="finPrueba" type="date" value="'+m.finPrueba+'"></label>':'')
@@ -1044,6 +1050,9 @@ $("memEd").addEventListener("change",e=>{const m=edMem(e.target),k=e.target.data
   else if(k==="cada"){m.cada=Math.min(60,Math.max(1,Math.round(+e.target.value||1)));e.target.value=m.cada;}
   else if(k==="prox"){if(!isDay(e.target.value)){e.target.value=m.prox;return;}m.prox=e.target.value;m.dia=+m.prox.slice(8);}
   else if(k==="finPrueba"){m.finPrueba=isDay(e.target.value)?e.target.value:"";}
+  else if(k==="promo"){m.promoCobros=e.target.checked?Math.max(1,m.promoCobros):0;persist();renderMemEd();renderAll();return;}
+  else if(k==="promoMonto"){m.promoMonto=Math.max(0,Math.round(+e.target.value||0));e.target.value=m.promoMonto;}
+  else if(k==="promoCobros"){m.promoCobros=Math.max(0,Math.round(+e.target.value||0));if(!m.promoCobros){persist();renderMemEd();renderAll();toast("Suscripción guardada");return;}e.target.value=m.promoCobros;}
   else if(k==="prueba"){m.prueba=e.target.checked;persist();renderMemEd();renderAll();return;}
   persist();const d=e.target.closest("details");d.querySelector("summary > span").firstChild.textContent=memEm(m)+" "+m.nombre;d.querySelector("summary small").textContent=memSum(m);
   $("memTot").textContent=memTotTx();
@@ -1058,23 +1067,23 @@ $("memEd").addEventListener("click",e=>{const b=e.target.closest("button");if(!b
   persist();renderMemEd();renderSobEd();renderAll();});
 $("memAdd").addEventListener("click",e=>{const b=e.target.closest("[data-new]");if(!b)return;const N=MEM_NEW[b.dataset.new];
   const px=addMonths(today(),1);
-  const m={id:"m"+uid(),nombre:N.nombre,monto:0,dia:+px.slice(8),cat:N.cat,activa:true,desde:today(),frec:"mensual",cada:2,prox:px,prueba:false,finPrueba:""};
+  const m={id:"m"+uid(),nombre:N.nombre,monto:0,dia:+px.slice(8),cat:N.cat,activa:true,desde:today(),frec:"mensual",cada:2,prox:px,prueba:false,finPrueba:"",promoMonto:0,promoCobros:0};
   S.settings.membresias.push(m);persist();renderMemEd();
   const d=document.querySelector('#memEd details[data-id="'+m.id+'"]');if(d){d.open=true;const i=d.querySelector(b.dataset.new==="otra"?"[data-k=nombre]":"[data-k=monto]");i.focus();i.select();}});
 
 function pruebasPorVencer(){return memActivas().filter(m=>m.prueba&&m.finPrueba&&daysTo(m.finPrueba)>=0&&daysTo(m.finPrueba)<=3);}
 const enDias=n=>n===0?"hoy":n===1?"mañana":"en "+n+" días";
 function renderCobros(){const pend=memPendientes(),soon=memProximos(3);
-  const html=pruebasPorVencer().map(m=>'<div class="cobro red"><span class="ic">⏰</span><b>Cancela la prueba de '+esc(m.nombre)+'</b><small>Vence '+enDias(daysTo(m.finPrueba))+' ('+fmtDay(m.finPrueba)+')'+(m.monto?'. Si no, te cobra '+money(m.monto):'')+'</small></div>').join("")
-    +pend.map(({m,due})=>'<div class="cobro"><span class="ic">'+memEm(m)+'</span><b>'+(due===today()?"Hoy toca":"Ya tocó")+' el cobro de '+esc(m.nombre)+'</b><small class="num">'+money(m.monto)+(due===today()?"":", el "+fmtDay(due))+'</small><span class="acts"><button data-pay="'+m.id+'">Anotar</button><button data-skip="'+m.id+'">No se cobró</button></span></div>').join("")
-    +soon.map(({m,due})=>'<div class="cobro soon red"><span class="ic">'+memEm(m)+'</span><b>'+esc(m.nombre)+' se cobra '+(Math.round((new Date(due+"T12:00")-new Date(today()+"T12:00"))/864e5)===1?"mañana":"el "+fmtDay(due))+'</b><small class="num">'+money(m.monto)+(memSaldo()>=m.monto?". Ya lo tienes apartado.":". En el sobre hay "+money(Math.max(0,memSaldo()))+".")+'</small></div>').join("");
+  const html=pruebasPorVencer().map(m=>'<div class="cobro red"><span class="ic">⏰</span><b>Cancela la prueba de '+esc(m.nombre)+'</b><small>Vence '+enDias(daysTo(m.finPrueba))+' ('+fmtDay(m.finPrueba)+')'+(precioMem(m)?'. Si no, te cobra '+money(precioMem(m))+(promoOn(m)?' (promo)':''):'')+'</small></div>').join("")
+    +pend.map(({m,due})=>'<div class="cobro"><span class="ic">'+memEm(m)+'</span><b>'+(due===today()?"Hoy toca":"Ya tocó")+' el cobro de '+esc(m.nombre)+'</b><small class="num">'+money(precioMem(m))+(promoOn(m)?" (promo)":"")+(due===today()?"":", el "+fmtDay(due))+'</small><span class="acts"><button data-pay="'+m.id+'">Anotar</button><button data-skip="'+m.id+'">No se cobró</button></span></div>').join("")
+    +soon.map(({m,due})=>'<div class="cobro soon red"><span class="ic">'+memEm(m)+'</span><b>'+esc(m.nombre)+' se cobra '+(Math.round((new Date(due+"T12:00")-new Date(today()+"T12:00"))/864e5)===1?"mañana":"el "+fmtDay(due))+'</b><small class="num">'+money(precioMem(m))+(promoOn(m)?" (promo)":"")+(memSaldo()>=precioMem(m)?". Ya lo tienes apartado.":". En el sobre hay "+money(Math.max(0,memSaldo()))+".")+'</small></div>').join("");
   $("cobrosIni").innerHTML=html;$("cobrosSob").innerHTML=html;}
 function onCobro(e){const b=e.target.closest("button");if(!b)return;
   const id=b.dataset.pay||b.dataset.skip,m=S.settings.membresias.find(x=>x.id===id);if(!m)return;
   /* Después de cada cobro (o si no se cobró) la app calcula sola el siguiente */
-  const old={prox:m.prox,prueba:m.prueba},back=()=>{m.prox=old.prox;m.prueba=old.prueba;};
+  const old={prox:m.prox,prueba:m.prueba,pc:m.promoCobros},back=()=>{m.prox=old.prox;m.prueba=old.prueba;m.promoCobros=old.pc;};
   if(b.dataset.pay){
-    const rec={id:uid(),t:"gasto",c:m.cat,a:m.monto,n:m.nombre,d:m.prox,at:Date.now(),mem:m.id};S.movs.push(rec);
+    const rec={id:uid(),t:"gasto",c:m.cat,a:precioMem(m),n:m.nombre,d:m.prox,at:Date.now(),mem:m.id};S.movs.push(rec);if(m.promoCobros>0)m.promoCobros--;
     m.prox=nextDate(m);m.prueba=false;persist();renderAll();renderMemEd();
     toast("Cobro anotado. El siguiente: "+fmtDay(m.prox),()=>{S.movs=S.movs.filter(x=>x.id!==rec.id);back();persist();renderAll();renderMemEd();toast("Listo, se quitó");});}
   else{m.prox=nextDate(m);persist();renderAll();renderMemEd();
@@ -1082,15 +1091,15 @@ function onCobro(e){const b=e.target.closest("button");if(!b)return;
 $("cobrosIni").addEventListener("click",onCobro);$("cobrosSob").addEventListener("click",onCobro);
 
 /* ---------- Próximos cobros (ordenados por fecha) ---------- */
-function renderProx(){const L=memActivas().filter(m=>m.monto>0||m.prueba).slice().sort((a,b)=>a.prox.localeCompare(b.prox));
+function renderProx(){const L=memActivas().filter(m=>precioMem(m)>0||m.prueba).slice().sort((a,b)=>a.prox.localeCompare(b.prox));
   $("proxBlock").hidden=!L.length;if(!L.length)return;
   $("proxList").innerHTML=L.map(m=>{const n=daysTo(m.prox),fp=m.prueba&&m.finPrueba?daysTo(m.finPrueba):null,red=n<=3||(fp!==null&&fp>=0&&fp<=3);
-    const sub=(m.prueba?"Prueba gratis"+(m.finPrueba?" · cancela antes del "+fmtDay(m.finPrueba):""):frecTx(m)[0].toUpperCase()+frecTx(m).slice(1))+" · "+fmtDay(m.prox);
-    return '<div class="pr'+(red?" red":"")+'"><span class="ic">'+memEm(m)+'</span><b>'+esc(m.nombre)+'</b><small>'+esc(sub)+'</small><span class="am num">'+money(m.monto)+'<small>'+(n<0?"ya pasó":enDias(n))+'</small></span></div>';}).join("");
-  const G=L.filter(esGrande),pr=L.filter(m=>m.prueba&&m.monto);
-  $("proxTot").innerHTML='<div class="totline"><span>Total al mes <small class="help">(anuales ÷ 12)</small></span><b class="num">'+money(memMensual())+'</b></div>'
+    const sub=(m.prueba?"Prueba gratis"+(m.finPrueba?" · cancela antes del "+fmtDay(m.finPrueba):""):frecTx(m)[0].toUpperCase()+frecTx(m).slice(1))+" · "+fmtDay(m.prox)+(promoOn(m)&&!m.prueba?" · promo":"");
+    return '<div class="pr'+(red?" red":"")+'"><span class="ic">'+memEm(m)+'</span><b>'+esc(m.nombre)+'</b><small>'+esc(sub)+'</small><span class="am num">'+money(precioMem(m))+(promoOn(m)?" (promo)":"")+'<small>'+(n<0?"ya pasó":enDias(n))+'</small></span></div>';}).join("");
+  const G=L.filter(esGrande),pr=L.filter(m=>m.prueba&&precioMem(m));
+  $("proxTot").innerHTML='<div class="totline"><span>Total al mes <small class="help">(anuales ÷ 12)</small></span><b class="num">'+money(memMensual())+'</b></div>'+(promoHint()?'<p class="help" style="margin-top:6px">'+esc(promoHint().trim())+'</p>':'')
     +(pr.length?'<p class="help" style="margin-top:6px">Si no cancelas las pruebas: +'+money(Math.round(pr.reduce((t,m)=>t+porMes(m),0)))+' al mes.</p>':'')
-    +(G.length?'<p class="help" style="margin-top:10px"><b>Cobros grandes del año</b></p>'+G.map(m=>'<div class="totline" style="border:0;padding-top:4px"><span>'+esc(m.nombre)+' · '+fmtDay(m.prox)+'</span><b class="num">'+money(m.monto)+'</b></div>').join(""):'');}
+    +(G.length?'<p class="help" style="margin-top:10px"><b>Cobros grandes del año</b></p>'+G.map(m=>'<div class="totline" style="border:0;padding-top:4px"><span>'+esc(m.nombre)+' · '+fmtDay(m.prox)+'</span><b class="num">'+money(precioMem(m))+'</b></div>').join(""):'');}
 
 /* ---------- Nube: cola de sincronización ---------- */
 /* La clave y la URL viven aparte (no van en respaldos ni en la nube). */
@@ -1116,8 +1125,8 @@ function resumen(){const mk=monthKey(today()),ms=inMonth(mk),sum=f=>ms.filter(f)
     sobresDeLaSemana:S.settings.sobres.map(x=>{const I=sobInfo(x);return{sobre:x.nombre,meta:I.meta,apartado:I.fund,gastado:I.spent};}),
     sobres:S.settings.sobres.map(x=>({id:x.id,nombre:x.nombre,saldo:r2(sobSaldo(x.id))})),primicia:primActiva(today()),
     suscripcionesAlMes:memMensual(),
-    proximosCobros:subs.map(m=>({servicio:m.nombre,monto:m.monto,frecuencia:frecTx(m),fecha:m.prox,pruebaGratis:m.prueba,cancelarAntesDe:m.finPrueba||null})),
-    cobrosGrandesDelAño:subs.filter(esGrande).map(m=>({servicio:m.nombre,monto:m.monto,fecha:m.prox})),
+    proximosCobros:subs.map(m=>({servicio:m.nombre,monto:precioMem(m),promo:promoOn(m)?{cobrosRestantes:m.promoCobros,luego:m.monto}:null,frecuencia:frecTx(m),fecha:m.prox,pruebaGratis:m.prueba,cancelarAntesDe:m.finPrueba||null})),
+    cobrosGrandesDelAño:subs.filter(esGrande).map(m=>({servicio:m.nombre,monto:precioMem(m),fecha:m.prox})),
     trabajo:(()=>{const W=semTrabajo();return{semana:{inicio:W.ws,sueldo:W.su,camion:W.ca,propinas:W.pr,dias:W.dias},porCobrar:S.settings.porCobrar.filter(x=>!x.cobrada).map(x=>({quien:x.quien,concepto:x.concepto,monto:x.monto}))};})()};}
 async function api(body){
   const r=await fetch(cloud.url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({...body,app:"mi-dinero",clave:cloud.key}),redirect:"follow"});
@@ -1170,7 +1179,7 @@ function memMatch(s){const a=nrm(s.servicio);if(a.length<3)return null;
   return S.settings.membresias.slice().sort((x,y)=>(y.activa?1:0)-(x.activa?1:0)).find(m=>{const b=nrm(m.nombre);return b.length>=3&&(a.includes(b)||b.includes(a));})||null;}
 const sugDia=s=>{const f=String(s.fecha||"").slice(0,10);return isDay(f)?f:today();};
 const noEs=new Set();   /* recibos donde tocaste "No es eso" (solo mientras la app está abierta) */
-function sugMonto(s,m){const mx=String(s.moneda||"").toUpperCase()==="MXN";return mx&&+s.monto>0?r2(+s.monto):(m?m.monto:0);}
+function sugMonto(s,m){const mx=String(s.moneda||"").toUpperCase()==="MXN";return mx&&+s.monto>0?r2(+s.monto):(m?precioMem(m):0);}
 function renderRevisar(){const L=sugVis();$("revBlock").hidden=!L.length;
   $("revIni").innerHTML=L.length?'<div class="cobro"><span class="ic">📬</span><b>'+L.length+(L.length===1?" suscripción":" suscripciones")+' por revisar</b><small>Las encontré en tu Gmail</small><span class="acts"><button data-rev="1">Ver</button></span></div>':"";
   if(!L.length){$("revList").innerHTML="";return;}
@@ -1189,15 +1198,15 @@ $("revList").addEventListener("click",e=>{const b=e.target.closest("button");if(
     if(String(s.moneda||"").toUpperCase()==="MXN"&&+s.monto>0)F.a=String(Math.round(+s.monto));
     $("note").value=String(s.servicio||"").slice(0,60);$("date").value=f>today()?today():f;setType("gasto",true);return;}
   if(b.dataset.cobro){const m=memMatch(s);if(!m)return;let a=sugMonto(s,m);if(!(a>0)){const i=card.querySelector("input");a=Math.round(+(i&&i.value)||0);if(!(a>0)){if(i)i.focus();return toast("Escribe cuánto te cobraron");}}
-    const d=sugDia(s),old={prox:m.prox,prueba:m.prueba},rec={id:uid(),t:"gasto",c:m.cat,a,n:m.nombre,d,at:Date.now(),mem:m.id};
-    S.movs.push(rec);
+    const d=sugDia(s),old={prox:m.prox,prueba:m.prueba,pc:m.promoCobros},rec={id:uid(),t:"gasto",c:m.cat,a,n:m.nombre,d,at:Date.now(),mem:m.id};
+    S.movs.push(rec);if(m.promoCobros>0)m.promoCobros--;
     if(m.prox<=addDays(d,10)){m.prox=nextDate(m);let n=0;while(m.prox<=d&&n++<200)m.prox=nextDate(m);m.prueba=false;}   /* ese cobro ya se anotó: el recordatorio pasa al siguiente ciclo */
     S.settings.sugDec[s.id]="ok";persist();renderAll();renderMemEd();
-    toast("Cobro de "+m.nombre+" anotado: "+money(a),()=>{S.movs=S.movs.filter(x=>x.id!==rec.id);m.prox=old.prox;m.prueba=old.prueba;delete S.settings.sugDec[s.id];persist();renderAll();renderMemEd();toast("Listo, se quitó");});return;}
+    toast("Cobro de "+m.nombre+" anotado: "+money(a),()=>{S.movs=S.movs.filter(x=>x.id!==rec.id);m.prox=old.prox;m.prueba=old.prueba;m.promoCobros=old.pc;delete S.settings.sugDec[s.id];persist();renderAll();renderMemEd();toast("Listo, se quitó");});return;}
   const pesos=Math.round(+card.querySelector("input").value||0),prueba=String(s.prueba)==="sí";
   if(!(pesos>0)&&!prueba){card.querySelector("input").focus();return toast("Escribe cuánto te cobran en pesos");}
   const frec=FRECS.includes(s.frecuencia)?s.frecuencia:"mensual",f0=sugDia(s);
-  const m={id:"m"+uid(),nombre:String(s.servicio||"Suscripción").slice(0,30),monto:pesos,dia:+f0.slice(8),cat:"suscripciones",activa:true,desde:today(),frec,cada:2,prox:f0,prueba,finPrueba:""};
+  const m={id:"m"+uid(),nombre:String(s.servicio||"Suscripción").slice(0,30),monto:pesos,dia:+f0.slice(8),cat:"suscripciones",activa:true,desde:today(),frec,cada:2,prox:f0,prueba,finPrueba:"",promoMonto:0,promoCobros:0};
   let n=0;while(m.prox<=today()&&n++<200)m.prox=nextDate(m);   /* el cobro que sigue después del correo */
   S.settings.membresias.push(m);S.settings.sugDec[s.id]="ok";persist();renderRevisar();renderMemEd();renderAll();
   toast(m.nombre+" agregada. Próximo cobro: "+fmtDay(m.prox),()=>{S.settings.membresias=S.settings.membresias.filter(x=>x!==m);delete S.settings.sugDec[s.id];persist();renderRevisar();renderMemEd();renderAll();});});
