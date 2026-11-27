@@ -33,8 +33,11 @@ Hazlo en la computadora. El paso 9 es en el iPhone.
 13. Prueba sin internet: pon **modo avión** → anota un gasto → arriba dice "Sin internet · ⏳ 1 pendiente" → quita el modo avión → en unos segundos dice **✓ En la nube** y el gasto aparece en la pestaña `movimientos` de la hoja.
 14. Gmail: en Sobres aparece **Revisar** con cobros que encontró en tu correo. Escribe cuánto te cobran en pesos → **Aceptar**, o **Ignorar**. Se revisa solo cada día a las 7 am.
 
-## Si un día cambias el script
-Pega el código nuevo → **Implementar → Administrar implementaciones** → ✏️ → Versión: **Nueva versión** → Implementar. La URL no cambia.
+## Actualizar el código
+Cuando haya una versión nueva de `Codigo.gs` (por ejemplo, para el botón **Buscar recibos ahora**):
+1. Abre tu proyecto **API Santino** en script.google.com, borra todo lo de `Código.gs` y pega el [`Codigo.gs`](Codigo.gs) nuevo → 💾 Guardar.
+2. **Implementar → Administrar implementaciones** → ✏️ (lápiz) → Versión: **Nueva versión** → **Implementar**. La URL y la clave no cambian.
+3. Si la app dice "Actualiza tu Apps Script", es que falta este paso.
 
 ## Para "Mi día" (después)
 Usa la misma URL y la misma clave. La app manda `"app": "mi-dia"` y el script crea solo **Mi día - datos** y **mi-dia-respaldo.json** en la misma carpeta.

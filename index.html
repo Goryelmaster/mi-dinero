@@ -285,6 +285,18 @@ h2{font:700 18px/1.2 var(--round);margin:0}
 .chk{display:flex;align-items:center;gap:10px;font-size:15px}
 .chk input{width:20px;height:20px;accent-color:var(--leaf)}
 .later{margin-top:6px;width:100%;height:44px;border-radius:14px;color:var(--ink-2);font-weight:600}
+/* Traspasos y búsqueda de recibos */
+.sob-f{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:6px}
+.sob-f:empty{display:none}
+.tl{font-size:12px;color:var(--ink-3)}
+.sob-f .link{flex:none;font-size:13px}
+.tras-row{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14px;padding:8px 0;border-top:1px solid var(--paper)}
+.tras-row:first-of-type{border-top:0}
+.tras-row small{display:block;color:var(--ink-2);font-size:12px}
+.tras-row button{flex:none;width:36px;height:36px;border-radius:12px;color:var(--coral);font-size:20px;line-height:1}
+.quick{display:flex;gap:8px}
+.quick button{flex:1;padding:10px 12px;border-radius:14px;background:var(--paper);font:700 14px var(--round);transition:transform 140ms var(--ease-out)}
+.quick button:active{transform:scale(.97)}
 /* Temas */
 .themes{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .th{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 4px;border-radius:14px;border:2px solid transparent;font-size:13px;color:var(--ink-2);transition:transform 140ms var(--ease-out)}
@@ -430,12 +442,18 @@ h2{font:700 18px/1.2 var(--round);margin:0}
     <div><h1>Tus sobres</h1><p class="sub" id="sobSub"></p></div>
     <div id="sobPend"></div>
     <div id="cobrosSob" class="cobros"></div>
+    <button class="ghost" id="revBuscar">🔄 Buscar recibos ahora</button>
     <section class="block" id="revBlock" hidden style="display:flex;flex-direction:column;gap:10px">
       <div class="block-h" style="margin:0"><h2 id="revTitle">Revisar</h2></div>
-      <p class="help">Los encontré en tu Gmail. Escribe cuánto te cobran en pesos y toca Aceptar, o Ignorar si no es una suscripción.</p>
+      <p class="help">Los encontré en tu Gmail. Si ya la tienes anotada, toca Anotar cobro. Si es nueva, escribe cuánto te cobran en pesos y acéptala. Si fue una compra suelta, toca Es una compra.</p>
       <div class="cobros" id="revList"></div>
     </section>
     <div class="sobres" id="sobList"></div>
+    <button class="ghost" id="trasOpen">↔ Pasar dinero entre sobres</button>
+    <section class="block" id="trasBlock" hidden>
+      <div class="block-h"><h2>Traspasos recientes</h2></div>
+      <div id="trasList"></div>
+    </section>
     <p class="help">Lo que llega a cada sobre se queda ahí hasta que lo gastes. Cambia el reparto en Ajustes.</p>
     <section class="block" id="proxBlock">
       <div class="block-h"><h2>Próximos cobros</h2></div>
@@ -571,6 +589,21 @@ h2{font:700 18px/1.2 var(--round);margin:0}
   <button class="later" id="tuLater">Cancelar</button>
 </section>
 
+<!-- Hoja para pasar dinero entre sobres -->
+<section class="sheet" id="trasSheet" role="dialog" aria-modal="true" aria-labelledby="trasTitle" aria-hidden="true">
+  <div class="grab"></div>
+  <div class="rep-h"><small id="trasTitle">Pasar dinero entre sobres</small></div>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <label class="field"><span>De</span><select class="input" id="trasDe"></select></label>
+    <label class="field"><span>A</span><select class="input" id="trasA"></select></label>
+    <label class="field"><span>Monto ($)</span><input class="input num" id="trasMonto" type="number" inputmode="numeric" min="0" step="1" placeholder="0"></label>
+    <div class="quick"><button id="trasFalta" type="button">Lo que falta</button><button id="trasTodo" type="button">Todo</button></div>
+    <p class="help" id="trasMsg"></p>
+  </div>
+  <button class="save" id="trasGo" disabled>Pasar</button>
+  <button class="later" id="trasLater">Cancelar</button>
+</section>
+
 <div class="toast" id="toast" role="status"><span id="toastTx"></span><button id="toastBtn">Deshacer</button></div>
 
 <script>
@@ -702,6 +735,7 @@ function normalize(d){
   if(!st.memDesde)st.memDesde=ymd(new Date());
   if(!Array.isArray(st.memOmit))st.memOmit=[];
   if(!st.sugDec||typeof st.sugDec!=="object")st.sugDec={};
+  st.traspasos=(Array.isArray(st.traspasos)?st.traspasos:[]).filter(x=>x&&x.id&&x.de&&x.a&&x.de!==x.a&&Math.round(+x.monto)>0&&isDay(x.d)).map(x=>({id:x.id,de:String(x.de),a:String(x.a),monto:Math.round(+x.monto),d:x.d,sem:isDay(x.sem)?x.sem:weekStart(x.d),at:+x.at||0}));
   const movs0=Array.isArray(d.movs)?d.movs:[];
   st.membresias=(Array.isArray(st.membresias)?st.membresias:[]).filter(m=>m&&m.id).map(m=>{
     const o={...m,nombre:String(m.nombre||"Suscripción"),monto:Math.max(0,+m.monto||0),dia:Math.min(31,Math.max(1,Math.round(+m.dia||1))),cat:m.cat||"suscripciones",activa:m.activa!==false,desde:m.desde||st.memDesde,
@@ -761,21 +795,23 @@ const frecTx=m=>m.frec==="meses"?"cada "+m.cada+" meses":m.frec;
 function memPendientes(){const t=today();return memActivas().filter(m=>m.monto>0&&m.prox<=t).map(m=>({m,due:m.prox}));}
 function memProximos(dias){const t=today(),L=addDays(t,dias);
   return memActivas().filter(m=>m.monto>0&&m.prox>t&&m.prox<=L).map(m=>({m,due:m.prox})).sort((a,b)=>a.due.localeCompare(b.due));}
-function memFundedBefore(ws){return S.settings.repartos.filter(r=>r.sem<ws).reduce((t,r)=>t+(((r.partes||[]).find(p=>p.id==="membresias")||{}).a||0),0);}
+/* Traspasos entre sobres (S.settings.traspasos): neto de un sobre = lo que le pasaron − lo que pasó a otros. fn filtra cuáles cuentan. */
+function trasNet(id,fn){return S.settings.traspasos.filter(x=>!fn||fn(x)).reduce((t,x)=>t+(x.a===id?x.monto:0)-(x.de===id?x.monto:0),0);}
+function memFundedBefore(ws){return S.settings.repartos.filter(r=>r.sem<ws).reduce((t,r)=>t+(((r.partes||[]).find(p=>p.id==="membresias")||{}).a||0),0)+trasNet("membresias",x=>x.sem<ws);}
 function memSpent(from,to){const x=sobById("membresias");if(!x)return 0;return S.movs.filter(m=>m.t==="gasto"&&x.cats.includes(m.c)&&m.d>=from&&m.d<=to).reduce((t,m)=>t+m.a,0);}
-function memSaldo(){const all=S.settings.repartos.reduce((t,r)=>t+(((r.partes||[]).find(p=>p.id==="membresias")||{}).a||0),0);return all-memSpent(S.settings.memDesde,"9999");}
+function memSaldo(){const all=S.settings.repartos.reduce((t,r)=>t+(((r.partes||[]).find(p=>p.id==="membresias")||{}).a||0),0);return all+trasNet("membresias")-memSpent(S.settings.memDesde,"9999");}
 /* Meta de la semana: la parte semanal, o más si un cobro de esta semana no alcanza con lo apartado */
 function memTarget(ws){const we=weekEnd(ws),prev=memFundedBefore(ws)-memSpent(S.settings.memDesde,ymd(new Date(new Date(ws+"T12:00").getTime()-864e5)));
   const due=memActivas().filter(m=>m.monto>0).reduce((t,m)=>{let d=m.prox,n=0;while(d<=we&&n++<60){if(d>=ws)t+=m.monto;d=nextDate(m,d);}return t;},0);
   return Math.max(memSemanal(),Math.round(due-prev));}
 const fmtDay=d=>new Date(d+"T12:00").toLocaleDateString("es-MX",{day:"numeric",month:"short"});
 function sobTarget(x,ws){return x.tipo==="porcentaje"?Math.round(diezmoBase(ws).neto*(+x.monto||0)/100):x.tipo==="membresias"?memTarget(ws):(+x.monto||0);}
-function sobFunded(id,ws){return S.settings.repartos.filter(r=>r.sem===ws).reduce((t,r)=>t+(((r.partes||[]).find(p=>p.id===id)||{}).a||0),0);}
+function sobFunded(id,ws){return S.settings.repartos.filter(r=>r.sem===ws).reduce((t,r)=>t+(((r.partes||[]).find(p=>p.id===id)||{}).a||0),0)+trasNet(id,x=>x.sem===ws);}
 function sobSpent(x,ws){return inWeek(ws).filter(m=>m.t==="gasto"&&x.cats.includes(m.c)).reduce((t,m)=>t+m.a,0);}
 function sobInfo(x,ws){ws=ws||weekStart();const meta=sobTarget(x,ws),spent=sobSpent(x,ws),fund=sobFunded(x.id,ws),save=KEEP_SOB.includes(x.id);
   const pct=meta?spent/meta:(spent?2:0);
   return{x,meta,spent,fund,pct,save,st:save?"keep":pct>1?"over":pct>=.8?"warn":""};}
-function ahorroTotal(){const ah=sobById("ahorro");const inn=S.settings.repartos.reduce((t,r)=>t+(((r.partes||[]).find(p=>p.id==="ahorro")||{}).a||0),0);
+function ahorroTotal(){const ah=sobById("ahorro");const inn=S.settings.repartos.reduce((t,r)=>t+(((r.partes||[]).find(p=>p.id==="ahorro")||{}).a||0),0)+trasNet("ahorro");
   const out=ah?S.movs.filter(m=>m.t==="gasto"&&ah.cats.includes(m.c)).reduce((t,m)=>t+m.a,0):0;return inn-out;}
 /* ---------- Reparto automático (en centavos) ---------- */
 function r2(n){return Math.round(n*100)/100;}
@@ -812,10 +848,10 @@ function migrarReglas(){const sd=S.settings.seeds;if(sd.reglasV1)return false;sd
 function addTraspaso(from,to,x){const rec={id:uid(),tipo:"traspaso",movs:[],d:today(),sem:weekStart(),monto:x,partes:[{id:from,a:-x,falta:0},{id:to,a:x,falta:0}],at:Date.now()};S.settings.repartos.push(rec);return rec;}
 /* Saldo de un sobre = lo que le han repartido − lo que has gastado de sus categorías (desde que empezó el reparto automático) */
 function sobSaldo(id){if(id==="membresias")return memSaldo();if(id==="ahorro")return ahorroTotal();
-  const x=sobById(id),D=S.settings.reglas.desde,inn=S.settings.repartos.filter(r=>r.d>=D).reduce((t,r)=>t+(((r.partes||[]).find(p=>p.id===id)||{}).a||0),0);
+  const x=sobById(id),D=S.settings.reglas.desde,inn=S.settings.repartos.filter(r=>r.d>=D).reduce((t,r)=>t+(((r.partes||[]).find(p=>p.id===id)||{}).a||0),0)+trasNet(id,y=>y.d>=D);
   const out=x?S.movs.filter(m=>m.t==="gasto"&&x.cats.includes(m.c)&&m.d>=D).reduce((t,m)=>t+m.a,0):0;return r2(inn-out);}
 function sobSemana(id,ws){const x=sobById(id),we=weekEnd(ws);
-  const entro=S.settings.repartos.filter(r=>r.sem===ws).reduce((t,r)=>{const a=((r.partes||[]).find(p=>p.id===id)||{}).a||0;return t+(a>0?a:0);},0);
+  const entro=S.settings.repartos.filter(r=>r.sem===ws).reduce((t,r)=>{const a=((r.partes||[]).find(p=>p.id===id)||{}).a||0;return t+(a>0?a:0);},0)+trasNet(id,y=>y.sem===ws&&y.a===id);
   const gasto=x?S.movs.filter(m=>m.t==="gasto"&&x.cats.includes(m.c)&&m.d>=ws&&m.d<=we).reduce((t,m)=>t+m.a,0):0;return{entro:r2(entro),gasto:r2(gasto)};}
 function repartidoIds(){const ids=new Set();S.settings.repartos.forEach(r=>(r.movs||[]).forEach(i=>ids.add(i)));return ids;}
 function pendientes(){const ws=weekStart(),ids=repartidoIds();return inWeek(ws).filter(m=>m.t==="ingreso"&&!m.primicia&&!ids.has(m.id));}
@@ -868,8 +904,49 @@ function renderSobres(){const ws=weekStart(),we=weekEnd(ws),dl=daysLeftWeek();
     const w=W.entro>0?W.gasto/W.entro:0,st=sal<0?"over":"";
     return '<article class="sobre '+st+'"><div class="sobre-h"><div><h3>'+sobEm(x)+' '+esc(x.nombre)+'</h3><small>'+esc(desc)+'</small></div>'
       +'<div class="amt num">'+money(sal)+'<span>en el sobre</span></div></div>'
-      +'<div class="bar"><i class="'+(w>1?"over":"save-bar")+'" style="width:'+barW(w)+'"></i></div><p>'+line+'</p></article>';}).join("");}
+      +'<div class="bar"><i class="'+(w>1?"over":"save-bar")+'" style="width:'+barW(w)+'"></i></div><p>'+line+'</p>'
+      +'<div class="sob-f"><span class="tl">'+trasNote(x.id,KEEP_SOB.includes(x.id),ws)+'</span>'+(x.id!=="diezmo"&&disp(x.id)>=1?'<button class="link" data-pasar="'+esc(x.id)+'">Pasar</button>':'')+'</div></article>';}).join("");
+  const rec=S.settings.traspasos.filter(x=>x.sem>=addDays(ws,-21)).sort((a,b)=>b.d.localeCompare(a.d)||b.at-a.at),nm=id=>esc((sobById(id)||{nombre:"otro sobre"}).nombre);
+  $("trasBlock").hidden=!rec.length;
+  $("trasList").innerHTML=rec.map(x=>'<div class="tras-row"><span><b class="num">'+money(x.monto)+'</b> de '+nm(x.de)+' a '+nm(x.a)+'<small>'+(x.d===today()?"Hoy":esc(fmtDay(x.d)))+'</small></span><button data-tdel="'+esc(x.id)+'" aria-label="Quitar este traspaso">×</button></div>').join("");}
+/* Línea discreta con los traspasos del sobre: de esta semana, o acumulados en los sobres que se guardan */
+function trasNote(id,keep,ws){const by={};S.settings.traspasos.forEach(x=>{if(x.de!==id&&x.a!==id)return;if(!keep&&x.sem!==ws)return;const o=x.a===id?x.de:x.a;by[o]=(by[o]||0)+(x.a===id?x.monto:-x.monto);});
+  return Object.keys(by).filter(k=>by[k]).map(k=>"↔ "+(by[k]>0?"+"+money(by[k])+" de ":"−"+money(-by[k])+" a ")+esc((sobById(k)||{nombre:"otro sobre"}).nombre)).join(" · ");}
 $("sobPend").addEventListener("click",e=>{if(e.target.closest("#pendGo"))openRep(pendientes().map(m=>m.id));});
+
+/* ---------- Pasar dinero entre sobres (nunca el diezmo) ---------- */
+const sobTr=()=>S.settings.sobres.filter(x=>x.id!=="diezmo");
+const disp=id=>Math.floor(r2(sobSaldo(id)));
+function paintTrasA(reset){const de=$("trasDe").value,cur=$("trasA").value,L=sobTr().filter(x=>x.id!==de);
+  const neg=L.filter(x=>sobSaldo(x.id)<0).sort((a,b)=>sobSaldo(a.id)-sobSaldo(b.id))[0];
+  $("trasA").innerHTML=L.map(x=>{const v=sobSaldo(x.id);return '<option value="'+esc(x.id)+'">'+(v<0?"⚠ ":"")+sobEm(x)+" "+esc(x.nombre)+" · "+money(v)+'</option>';}).join("");
+  $("trasA").value=!reset&&L.some(x=>x.id===cur)?cur:(neg?neg.id:(L[0]||{}).id);}
+function paintTras(){const de=$("trasDe").value,a=$("trasA").value,av=disp(de),m=Math.round(+$("trasMonto").value||0),sa=a?sobSaldo(a):0,falta=sa<0?Math.ceil(-sa):0;
+  const xd=sobById(de),xa=sobById(a);
+  $("trasFalta").hidden=!(falta>0);$("trasFalta").textContent="Lo que falta ("+money(Math.min(falta,av))+")";$("trasTodo").textContent="Todo ("+money(av)+")";
+  $("trasMsg").textContent=!xa?"No hay otro sobre al que pasar.":m>av?"Solo hay "+money(av)+" disponible en "+(xd?xd.nombre:"ese sobre")+".":(+$("trasMonto").value<0?"El monto debe ser mayor a cero.":"Disponible en "+(xd?xd.nombre:"ese sobre")+": "+money(av)+".");
+  $("trasMsg").style.color=m>av?"var(--coral)":"";
+  $("trasGo").disabled=!(xa&&m>0&&m<=av);$("trasGo").textContent=m>0?"Pasar "+money(m):"Pasar";}
+function openTras(from){const src=sobTr().filter(x=>disp(x.id)>=1);
+  if(!src.length)return toast("No hay dinero disponible en tus sobres");
+  $("trasDe").innerHTML=src.map(x=>'<option value="'+esc(x.id)+'">'+sobEm(x)+" "+esc(x.nombre)+" · "+money(sobSaldo(x.id))+'</option>').join("");
+  $("trasDe").value=src.some(x=>x.id===from)?from:src[0].id;paintTrasA(true);$("trasMonto").value="";paintTras();openPanel("trasSheet");}
+$("trasOpen").onclick=()=>openTras();
+$("sobList").addEventListener("click",e=>{const b=e.target.closest("[data-pasar]");if(b)openTras(b.dataset.pasar);});
+$("trasDe").addEventListener("change",()=>{paintTrasA(false);paintTras();});
+$("trasA").addEventListener("change",paintTras);
+$("trasMonto").addEventListener("input",paintTras);
+$("trasFalta").onclick=()=>{const sa=sobSaldo($("trasA").value);$("trasMonto").value=Math.min(sa<0?Math.ceil(-sa):0,disp($("trasDe").value));paintTras();};
+$("trasTodo").onclick=()=>{$("trasMonto").value=disp($("trasDe").value);paintTras();};
+$("trasLater").onclick=()=>closePanel("trasSheet");
+$("trasGo").onclick=()=>{const de=$("trasDe").value,a=$("trasA").value,m=Math.round(+$("trasMonto").value||0),xd=sobById(de),xa=sobById(a);
+  if(!(xd&&xa&&de!==a&&de!=="diezmo"&&a!=="diezmo"&&m>0&&m<=disp(de)))return paintTras();
+  const rec={id:uid(),de,a,monto:m,d:today(),sem:weekStart(),at:Date.now()};S.settings.traspasos.push(rec);persist();closePanel("trasSheet");renderAll();
+  toast("Pasaste "+money(m)+" de "+xd.nombre+" a "+xa.nombre,()=>{S.settings.traspasos=S.settings.traspasos.filter(x=>x.id!==rec.id);persist();renderAll();toast("Listo, se quitó");});};
+$("trasList").addEventListener("click",e=>{const b=e.target.closest("[data-tdel]");if(!b)return;const rec=S.settings.traspasos.find(x=>x.id===b.dataset.tdel);if(!rec)return;
+  if(!confirmTwice(b,"Toca otra vez para quitar este traspaso"))return;
+  S.settings.traspasos=S.settings.traspasos.filter(x=>x!==rec);persist();renderAll();
+  toast("Traspaso quitado",()=>{S.settings.traspasos.push(rec);persist();renderAll();});});
 
 /* ---------- Hoja de repartir ---------- */
 let R=null;
@@ -1087,24 +1164,54 @@ setInterval(()=>{if(cloudOn()&&navigator.onLine&&!syncing&&isDirty())syncNow(fal
 
 /* ---------- Bandeja "Revisar": sugerencias de Gmail ---------- */
 function sugVis(){return(sync.sug||[]).filter(s=>s&&s.id&&!S.settings.sugDec[s.id]);}
+/* Une un recibo con una membresía que ya tienes: nombres sin acentos ni símbolos, uno contiene al otro (mín. 3 letras). Activas primero. */
+const nrm=t=>String(t||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]/g,"");
+function memMatch(s){const a=nrm(s.servicio);if(a.length<3)return null;
+  return S.settings.membresias.slice().sort((x,y)=>(y.activa?1:0)-(x.activa?1:0)).find(m=>{const b=nrm(m.nombre);return b.length>=3&&(a.includes(b)||b.includes(a));})||null;}
+const sugDia=s=>{const f=String(s.fecha||"").slice(0,10);return isDay(f)?f:today();};
+const noEs=new Set();   /* recibos donde tocaste "No es eso" (solo mientras la app está abierta) */
+function sugMonto(s,m){const mx=String(s.moneda||"").toUpperCase()==="MXN";return mx&&+s.monto>0?r2(+s.monto):(m?m.monto:0);}
 function renderRevisar(){const L=sugVis();$("revBlock").hidden=!L.length;
   $("revIni").innerHTML=L.length?'<div class="cobro"><span class="ic">📬</span><b>'+L.length+(L.length===1?" suscripción":" suscripciones")+' por revisar</b><small>Las encontré en tu Gmail</small><span class="acts"><button data-rev="1">Ver</button></span></div>':"";
   if(!L.length){$("revList").innerHTML="";return;}
   $("revTitle").textContent="Revisar ("+L.length+")";
-  $("revList").innerHTML=L.map(s=>{const mx=String(s.moneda||"").toUpperCase()==="MXN";
-    return '<div class="sug" data-sid="'+esc(s.id)+'"><b>'+esc(s.servicio||"Servicio")+'</b><small class="num">'+esc((s.moneda||"")+" "+(s.monto??"?"))+' · '+esc(s.frecuencia||"mensual")+(String(s.prueba)==="sí"?" · prueba gratis":"")+(s.fecha?' · correo del '+esc(fmtDay(String(s.fecha).slice(0,10))):'')+'</small>'
+  $("revList").innerHTML=L.map(s=>{const mx=String(s.moneda||"").toUpperCase()==="MXN",m=noEs.has(s.id)?null:memMatch(s),a=m?sugMonto(s,m):0;
+    return '<div class="sug" data-sid="'+esc(s.id)+'"><b>'+(m?"Parece tu cobro de "+esc(m.nombre):esc(s.servicio||"Servicio"))+'</b><small class="num">'+esc((s.moneda||"")+" "+(s.monto??"?"))+' · '+esc(s.frecuencia||"mensual")+(String(s.prueba)==="sí"?" · prueba gratis":"")+(s.fecha?' · correo del '+esc(fmtDay(sugDia(s))):'')+'</small>'
       +(s.asunto?'<small>'+esc(s.asunto)+'</small>':'')
-      +'<div class="acts"><input class="input num" type="number" inputmode="numeric" min="0" placeholder="Pesos" aria-label="Cuánto te cobran en pesos" value="'+(mx&&+s.monto?Math.round(+s.monto):"")+'"><button class="ok" data-ok="1">Aceptar</button><button class="no" data-no="1">Ignorar</button></div></div>';}).join("");}
+      +(m?'<div class="acts">'+(a>0?'':'<input class="input num" type="number" inputmode="numeric" min="0" placeholder="Pesos" aria-label="Cuánto te cobraron en pesos">')+'<button class="ok" data-cobro="1">Anotar cobro'+(a>0?" · "+money(a):"")+'</button><button class="no" data-noes="1">No es eso</button><button class="no" data-no="1">Ignorar</button></div>'
+        :'<div class="acts"><input class="input num" type="number" inputmode="numeric" min="0" placeholder="Pesos" aria-label="Cuánto te cobran en pesos" value="'+(mx&&+s.monto?Math.round(+s.monto):"")+'"><button class="ok" data-ok="1">Aceptar como membresía</button></div>')
+      +'<div class="acts" style="justify-content:flex-end"><button class="no" data-compra="1">Es una compra</button>'+(m?'':'<button class="no" data-no="1">Ignorar</button>')+'</div></div>';}).join("");}
 $("revIni").addEventListener("click",e=>{if(e.target.closest("[data-rev]")){go("sobres");setTimeout(()=>$("revBlock").scrollIntoView({block:"start"}),50);}});
 $("revList").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const card=b.closest(".sug"),s=(sync.sug||[]).find(x=>x.id===card.dataset.sid);if(!s)return;
   if(b.dataset.no){S.settings.sugDec[s.id]="no";persist();renderRevisar();toast("Ignorada",()=>{delete S.settings.sugDec[s.id];persist();renderRevisar();});return;}
+  if(b.dataset.noes){noEs.add(s.id);renderRevisar();return;}
+  if(b.dataset.compra){const f=sugDia(s);openSheet(null);F.c="otro-gasto";F.sugId=s.id;
+    if(String(s.moneda||"").toUpperCase()==="MXN"&&+s.monto>0)F.a=String(Math.round(+s.monto));
+    $("note").value=String(s.servicio||"").slice(0,60);$("date").value=f>today()?today():f;setType("gasto",true);return;}
+  if(b.dataset.cobro){const m=memMatch(s);if(!m)return;let a=sugMonto(s,m);if(!(a>0)){const i=card.querySelector("input");a=Math.round(+(i&&i.value)||0);if(!(a>0)){if(i)i.focus();return toast("Escribe cuánto te cobraron");}}
+    const d=sugDia(s),old={prox:m.prox,prueba:m.prueba},rec={id:uid(),t:"gasto",c:m.cat,a,n:m.nombre,d,at:Date.now(),mem:m.id};
+    S.movs.push(rec);
+    if(m.prox<=addDays(d,10)){m.prox=nextDate(m);let n=0;while(m.prox<=d&&n++<200)m.prox=nextDate(m);m.prueba=false;}   /* ese cobro ya se anotó: el recordatorio pasa al siguiente ciclo */
+    S.settings.sugDec[s.id]="ok";persist();renderAll();renderMemEd();
+    toast("Cobro de "+m.nombre+" anotado: "+money(a),()=>{S.movs=S.movs.filter(x=>x.id!==rec.id);m.prox=old.prox;m.prueba=old.prueba;delete S.settings.sugDec[s.id];persist();renderAll();renderMemEd();toast("Listo, se quitó");});return;}
   const pesos=Math.round(+card.querySelector("input").value||0),prueba=String(s.prueba)==="sí";
   if(!(pesos>0)&&!prueba){card.querySelector("input").focus();return toast("Escribe cuánto te cobran en pesos");}
-  const frec=FRECS.includes(s.frecuencia)?s.frecuencia:"mensual",f0=isDay(String(s.fecha).slice(0,10))?String(s.fecha).slice(0,10):today();
+  const frec=FRECS.includes(s.frecuencia)?s.frecuencia:"mensual",f0=sugDia(s);
   const m={id:"m"+uid(),nombre:String(s.servicio||"Suscripción").slice(0,30),monto:pesos,dia:+f0.slice(8),cat:"suscripciones",activa:true,desde:today(),frec,cada:2,prox:f0,prueba,finPrueba:""};
   let n=0;while(m.prox<=today()&&n++<200)m.prox=nextDate(m);   /* el cobro que sigue después del correo */
   S.settings.membresias.push(m);S.settings.sugDec[s.id]="ok";persist();renderRevisar();renderMemEd();renderAll();
   toast(m.nombre+" agregada. Próximo cobro: "+fmtDay(m.prox),()=>{S.settings.membresias=S.settings.membresias.filter(x=>x!==m);delete S.settings.sugDec[s.id];persist();renderRevisar();renderMemEd();renderAll();});});
+/* Buscar recibos ahora: el script revisa tu Gmail en ese momento (además de la búsqueda diaria de las 7 am) */
+let buscando=false;
+$("revBuscar").onclick=async()=>{if(buscando)return;
+  if(!cloudOn())return toast("Primero conecta la nube en Ajustes");
+  if(!navigator.onLine)return toast("Necesitas internet");
+  const b=$("revBuscar");buscando=true;b.disabled=true;b.textContent="Buscando en tu Gmail…";
+  try{const j=await api({accion:"buscar",decisiones:S.settings.sugDec});
+    if(Array.isArray(j.sugeridas))sync.sug=j.sugeridas;sync.err="";saveJ(SKEY,sync);renderAll();
+    const n=sugVis().length;toast(n?"Listo: "+n+(n===1?" recibo":" recibos")+" para revisar":"No hay recibos nuevos");
+  }catch(err){const m=String(err&&err.message||err);toast(/desconocida/i.test(m)?"Actualiza tu Apps Script (mira la guía)":"No se pudo buscar: "+m);}
+  buscando=false;b.disabled=false;b.textContent="🔄 Buscar recibos ahora";};
 
 /* ---------- Inicio ---------- */
 function haveNow(){return S.movs.reduce((s,m)=>s+(m.t==="gasto"?-m.a:m.a),0);}
@@ -1313,21 +1420,21 @@ function openPanel(id){if(!document.querySelector(".sheet.open"))lastFocus=docum
   $(id).classList.add("open");$("scrim").classList.add("open");$(id).setAttribute("aria-hidden","false");document.body.style.overflow="hidden";}
 function closePanel(id){$(id).classList.remove("open");$(id).setAttribute("aria-hidden","true");
   if(!document.querySelector(".sheet.open")){$("scrim").classList.remove("open");document.body.style.overflow="";if(lastFocus&&lastFocus.focus)lastFocus.focus({preventScroll:true});}}
-function closeAll(){if($("turnoSheet").classList.contains("open"))closePanel("turnoSheet");if($("repSheet").classList.contains("open")){R=null;closePanel("repSheet");}if($("sheet").classList.contains("open"))closeSheet();}
+function closeAll(){if($("trasSheet").classList.contains("open"))closePanel("trasSheet");if($("turnoSheet").classList.contains("open"))closePanel("turnoSheet");if($("repSheet").classList.contains("open")){R=null;closePanel("repSheet");}if($("sheet").classList.contains("open"))closeSheet();}
 function openAdjust(){F={t:"ajuste",c:"ajuste",a:"",id:null,auto:false};adjMode(true);$("delMv").hidden=true;$("saveOnly").hidden=true;paintAmt(false);openPanel("sheet");}
 $("adjBtn").onclick=openAdjust;
 function openSheet(m){adjMode(false);
   F=m?{t:m.t,c:m.c,a:String(m.a),id:m.id,auto:false}:{t:"gasto",c:null,a:"",id:null,auto:false};
   $("note").value=m?m.n||"":"";$("date").value=m?m.d:today();$("date").max=today();
   setType(F.t,!!m);$("delMv").hidden=!m;openPanel("sheet");}
-function closeSheet(){closePanel("sheet");}
+function closeSheet(){closePanel("sheet");F.sugId=null;}
 $("addBtn").onclick=()=>openSheet(null);
 $("scrim").onclick=closeAll;
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeAll();});
 
 // Deslizar hacia abajo para cerrar
-["sheet","repSheet","turnoSheet"].forEach(id=>{const sh=$(id);let y0=null,t0=0,dy=0;
-  sh.addEventListener("touchstart",e=>{if(sh.scrollTop>0||e.target.closest(".pad,.picks,input"))return;y0=e.touches[0].clientY;t0=Date.now();dy=0;sh.style.transition="none";},{passive:true});
+["sheet","repSheet","turnoSheet","trasSheet"].forEach(id=>{const sh=$(id);let y0=null,t0=0,dy=0;
+  sh.addEventListener("touchstart",e=>{if(sh.scrollTop>0||e.target.closest(".pad,.picks,input,select"))return;y0=e.touches[0].clientY;t0=Date.now();dy=0;sh.style.transition="none";},{passive:true});
   sh.addEventListener("touchmove",e=>{if(y0===null)return;dy=Math.max(0,e.touches[0].clientY-y0);sh.style.transform="translateY("+dy+"px)";},{passive:true});
   sh.addEventListener("touchend",()=>{if(y0===null)return;sh.style.transition="";sh.style.transform="";
     if(dy>120||dy/(Date.now()-t0)>.5)closeAll();y0=null;});});
@@ -1338,12 +1445,13 @@ function saveMov(repartir){
     const rec={id:uid(),t:"ajuste",c:"ajuste",a:d,n:"",d:today(),at:Date.now()};S.movs.push(rec);persist();renderAll();
     toast("Listo: ahora tienes "+money(haveNow()),()=>{S.movs=S.movs.filter(x=>x.id!==rec.id);persist();renderAll();toast("Listo, se quitó");});return;}
   const a=+F.a;if(!(a>0&&F.c))return;
-  const isNew=!F.id,cur=weekStart();
+  const isNew=!F.id,cur=weekStart(),sid=isNew?F.sugId:null;
   const touched=()=>S.settings.sobres.filter(x=>x.tipo==="fijo"&&x.id!=="ahorro"&&x.cats.includes(F.c)).map(x=>sobInfo(x,cur));
   const before=touched();
   const rec={id:F.id||uid(),t:F.t,c:F.c,a,n:$("note").value.trim(),d:$("date").value||today(),at:Date.now()};
   if(F.id){const i=S.movs.findIndex(x=>x.id===F.id);if(i>-1)S.movs[i]={...S.movs[i],...rec};}
   else S.movs.push(rec);
+  if(sid)S.settings.sugDec[sid]="ok";   /* vino de "Es una compra" en Revisar */
   persist();closeSheet();renderAll();
   const k=ALL[rec.c];
   if(isNew&&rec.t==="ingreso"&&repartir&&!reparteAuto(rec)){setTimeout(()=>openRep([rec.id]),300);return;}
@@ -1351,7 +1459,7 @@ function saveMov(repartir){
     after.forEach((A,i)=>{const B=before[i];if(!A.meta)return;
       if(A.pct>1&&B.pct<=1)setTimeout(()=>toast("Te pasaste del sobre "+A.x.nombre),5200);
       else if(A.pct>=.8&&B.pct<.8)setTimeout(()=>toast("Ya llevas "+Math.round(A.pct*100)+"% del sobre "+A.x.nombre),5200);});}
-  toast((F.id?"Cambios guardados":(rec.t==="gasto"?"Gasto anotado":rec.t==="venta"?"Venta anotada":"Ingreso anotado")+": "+money(a)+" · "+k.n+(reparteAuto(rec)?" · se repartió solo":"")),F.id?null:()=>{S.movs=S.movs.filter(x=>x.id!==rec.id);persist();renderAll();toast("Listo, se quitó");});
+  toast((F.id?"Cambios guardados":(rec.t==="gasto"?"Gasto anotado":rec.t==="venta"?"Venta anotada":"Ingreso anotado")+": "+money(a)+" · "+k.n+(reparteAuto(rec)?" · se repartió solo":"")),F.id?null:()=>{S.movs=S.movs.filter(x=>x.id!==rec.id);if(sid)delete S.settings.sugDec[sid];persist();renderAll();toast("Listo, se quitó");});
 }
 $("save").onclick=()=>saveMov(true);
 $("saveOnly").onclick=()=>saveMov(false);

@@ -69,6 +69,9 @@ function doPost(e) {
       if (q.accion === "guardar") {
         const err = guardar_(app, q);
         if (err) return out_({ ok: false, error: err });
+      } else if (q.accion === "buscar") {
+        // Búsqueda manual en Gmail (ya tenemos el candado, por eso va la versión sin candado)
+        if (app === "mi-dinero") buscarSuscripciones_();
       } else if (q.accion !== "sugeridas") {
         return out_({ ok: false, error: "Acción desconocida: " + q.accion });
       }
@@ -373,8 +376,15 @@ function hoja_(app) {
 }
 
 /* ============ Gmail → suscripciones sugeridas ============ */
-/** Corre sola 1 vez al día (activador). También puedes correrla a mano. */
+/** Corre sola 1 vez al día (activador). También puedes correrla a mano. Usa el mismo candado que la API. */
 function buscarSuscripciones() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  try { buscarSuscripciones_(); } finally { lock.releaseLock(); }
+}
+
+/** La búsqueda en sí (sin candado: quien la llame ya lo tiene). */
+function buscarSuscripciones_() {
   const ss = SpreadsheetApp.openById(hoja_("mi-dinero"));
   const sh = pestana_(ss, "sugeridas");
   if (sh.getLastRow() === 0) { sh.getRange(1, 1, 1, COLS_SUG.length).setValues([COLS_SUG]); sh.setFrozenRows(1); }
@@ -471,7 +481,8 @@ function decisiones_(dec) {
   });
 }
 
-/** Sugerencias pendientes: la más reciente por servicio, y nada de un servicio que ya aceptaste o ignoraste. */
+/** Sugerencias pendientes: la más reciente por servicio. Si ya decidiste (aceptar/ignorar) un recibo de un servicio,
+ *  se ocultan los pendientes de ese servicio hasta esa fecha; los recibos NUEVOS (más recientes) sí aparecen. */
 function sugeridas_() {
   const sh = SpreadsheetApp.openById(hoja_("mi-dinero")).getSheetByName("sugeridas");
   if (!sh || sh.getLastRow() < 2) return [];
@@ -482,12 +493,17 @@ function sugeridas_() {
     return o;
   });
   const key = function (o) { return String(o.servicio).toLowerCase().trim(); };
-  const decididos = {};
-  rows.forEach(function (o) { if (o.estado !== "nueva") decididos[key(o)] = true; });
+  const decididos = {}; // servicio → fecha del recibo decidido más reciente
+  rows.forEach(function (o) {
+    if (o.estado === "nueva") return;
+    const k = key(o);
+    if (decididos[k] === undefined || o.fecha > decididos[k]) decididos[k] = o.fecha;
+  });
   const porServicio = {};
   rows.forEach(function (o) {
-    if (o.estado !== "nueva" || decididos[key(o)]) return;
+    if (o.estado !== "nueva") return;
     const k = key(o);
+    if (decididos[k] !== undefined && o.fecha <= decididos[k]) return;
     if (!porServicio[k] || o.fecha > porServicio[k].fecha) porServicio[k] = o;
   });
   return Object.keys(porServicio).map(function (k) { return porServicio[k]; })
